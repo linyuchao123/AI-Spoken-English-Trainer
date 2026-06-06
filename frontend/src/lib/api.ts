@@ -138,4 +138,32 @@ export const grammarApi = {
     api.post<GrammarResult>("/api/grammar/correct", { text, model }),
 };
 
+// ============================================================
+// TTS API
+// ============================================================
+
+export interface TTSVoice {
+  key: string;
+  name: string;
+  gender: string;
+}
+
+export interface TTSVoices {
+  voices: Record<string, TTSVoice[]>;
+}
+
+export interface TTSResult {
+  audio_base64: string;
+  format: string;
+  voice: string;
+  provider: string;
+}
+
+export const ttsApi = {
+  speak: (text: string, voice = "default", provider = "edge") =>
+    api.post<TTSResult>("/api/tts/speak", { text, voice, provider }),
+
+  getVoices: () => api.get<TTSVoices>("/api/tts/voices"),
+};
+
 export default api;

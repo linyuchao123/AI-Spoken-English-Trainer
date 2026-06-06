@@ -124,3 +124,30 @@ class GrammarResponse(BaseModel):
     original: str
     corrected: str
     errors: list[GrammarError]
+
+
+# ============================================================
+# TTS Schemas
+# ============================================================
+
+class TTSRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+    voice: str = "default"
+    provider: str = "edge"  # "edge", "azure", or "openai"
+
+
+class TTSVoice(BaseModel):
+    key: str
+    name: str
+    gender: str = "varied"
+
+
+class TTSVoicesResponse(BaseModel):
+    voices: dict[str, list[TTSVoice]]
+
+
+class TTSResponse(BaseModel):
+    audio_base64: str
+    format: str = "mp3"
+    voice: str
+    provider: str

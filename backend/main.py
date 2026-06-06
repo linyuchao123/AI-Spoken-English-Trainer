@@ -17,6 +17,7 @@ from backend.api.auth import router as auth_router
 from backend.api.scenes import router as scenes_router
 from backend.api.sessions import router as sessions_router
 from backend.api.grammar import router as grammar_router
+from backend.api.tts import router as tts_router
 
 # Initialize database
 init_db()
@@ -44,6 +45,7 @@ app.include_router(auth_router)
 app.include_router(scenes_router)
 app.include_router(sessions_router)
 app.include_router(grammar_router)
+app.include_router(tts_router)
 
 
 @app.get("/api/health")
