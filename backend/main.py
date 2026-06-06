@@ -16,6 +16,7 @@ from utils.db import init_db
 from backend.api.auth import router as auth_router
 from backend.api.scenes import router as scenes_router
 from backend.api.sessions import router as sessions_router
+from backend.api.grammar import router as grammar_router
 
 # Initialize database
 init_db()
@@ -42,6 +43,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(scenes_router)
 app.include_router(sessions_router)
+app.include_router(grammar_router)
 
 
 @app.get("/api/health")

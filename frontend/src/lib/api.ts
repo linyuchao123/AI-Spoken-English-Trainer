@@ -114,4 +114,27 @@ export const sessionsApi = {
     api.post<Message[]>(`/api/sessions/${sessionId}/messages`, { content }),
 };
 
+// ============================================================
+// Grammar API
+// ============================================================
+
+export interface GrammarErrorItem {
+  type: string;
+  original_text: string;
+  corrected_text: string;
+  explanation: string;
+}
+
+export interface GrammarResult {
+  has_errors: boolean;
+  original: string;
+  corrected: string;
+  errors: GrammarErrorItem[];
+}
+
+export const grammarApi = {
+  correct: (text: string, model: string) =>
+    api.post<GrammarResult>("/api/grammar/correct", { text, model }),
+};
+
 export default api;
