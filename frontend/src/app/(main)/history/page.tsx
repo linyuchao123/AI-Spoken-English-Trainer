@@ -1,0 +1,78 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { sessionsApi, Session } from "@/lib/api";
+import { Clock, BarChart3, Zap } from "lucide-react";
+
+export default function HistoryPage() {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    sessionsApi.list(20).then(({ data }) => {
+      setSessions(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="max-w-3xl mx-auto py-8 px-6">
+      <div className="mb-8">
+        <h1 className="text-2xl font-extrabold text-text-primary flex items-center gap-2">
+          <Clock className="w-6 h-6 text-[#5B4FCF]" />
+          历史会话
+        </h1>
+        <p className="text-text-secondary text-sm mt-1">
+          查看你的英语口语练习记录
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-text-light text-sm">加载中...</div>
+      ) : sessions.length === 0 ? (
+        <div className="text-center py-16">
+          <BarChart3 className="w-12 h-12 text-text-light/50 mx-auto mb-4" />
+          <p className="text-text-secondary text-sm">暂无历史会话记录，快去开始练习吧！</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sessions.map((session) => (
+            <SessionCard key={session.id} session={session} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionCard({ session }: { session: Session }) {
+  const statusColor = session.status === "active" ? "text-emerald-500" : "text-text-light";
+  const statusText = session.status === "active" ? "进行中" : "已结束";
+  const date = session.created_at ? new Date(session.created_at).toLocaleDateString("zh-CN") : "";
+
+  return (
+    <div className="bg-white rounded-xl border border-border p-4 hover:shadow-md hover:border-[#5B4FCF]/20 transition-all cursor-pointer group">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-bold text-text-primary text-sm">{session.scene_name}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#5B4FCF]/10 text-[#5B4FCF] font-medium">
+              {session.difficulty}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-text-light">
+            <span>{date}</span>
+            <span>{session.total_rounds} 轮对话</span>
+            <span className={statusColor}>{statusText}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xl font-extrabold text-[#5B4FCF]">
+            {session.avg_pronunciation_score.toFixed(0)}
+          </div>
+          <div className="text-[10px] text-text-light">/ 100</div>
+        </div>
+      </div>
+    </div>
+  );
+}
