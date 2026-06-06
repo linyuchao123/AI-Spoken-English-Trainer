@@ -100,3 +100,26 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: Optional[str] = None
+
+
+# ============================================================
+# Grammar Schemas
+# ============================================================
+
+class GrammarRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+    model: str = "gpt-4o"
+
+
+class GrammarError(BaseModel):
+    type: str
+    original_text: str
+    corrected_text: str
+    explanation: str
+
+
+class GrammarResponse(BaseModel):
+    has_errors: bool
+    original: str
+    corrected: str
+    errors: list[GrammarError]
