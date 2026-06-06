@@ -228,12 +228,16 @@ Respond in the following JSON format ONLY (no other text):
             "type": "grammar/vocabulary/word_order/preposition/article/tense",
             "original_text": "the error part",
             "corrected_text": "the correction",
-            "explanation": "brief explanation in English"
+            "explanation": "brief English explanation of the error and correction",
+            "explanation_cn": "对应中文解释（简明扼要，帮助中文母语者理解错误原因）"
         }}
     ]
 }}
 
-If the sentence is already correct, set has_errors to false and leave the errors array empty."""
+IMPORTANT: Provide BOTH explanation (English) AND explanation_cn (Chinese) for EVERY error."""
+
+# Increased max_tokens multiplier for bilingual output
+GRAMMAR_MAX_TOKENS_MULTIPLIER = 5  # len(text) * multiplier
 
 # ============================================================
 # Report Generation Prompt

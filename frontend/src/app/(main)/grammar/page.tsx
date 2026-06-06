@@ -172,6 +172,11 @@ export default function GrammarPage() {
                       <p className="text-[11px] text-text-secondary mt-1 leading-relaxed">
                         {err.explanation}
                       </p>
+                      {err.explanation_cn && (
+                        <p className="text-[11px] text-text-light mt-0.5 leading-relaxed">
+                          {err.explanation_cn}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

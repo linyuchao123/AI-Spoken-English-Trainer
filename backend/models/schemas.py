@@ -116,6 +116,7 @@ class GrammarError(BaseModel):
     original_text: str
     corrected_text: str
     explanation: str
+    explanation_cn: str = ""
 
 
 class GrammarResponse(BaseModel):
