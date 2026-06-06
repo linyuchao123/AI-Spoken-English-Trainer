@@ -1,0 +1,32 @@
+# ============================================================
+# AI英语口语陪练 (AI Spoken English Trainer)
+# Core Dependencies
+# ============================================================
+
+# Web Framework
+streamlit>=1.31.0
+streamlit-webrtc>=0.47.0
+
+# LLM & AI
+openai>=1.12.0
+
+# Speech Services (Azure Pronunciation Assessment + TTS)
+azure-cognitiveservices-speech>=1.35.0
+
+# Environment & Config
+python-dotenv>=1.0.0
+
+# Data Visualization
+plotly>=5.18.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Audio Processing
+pyaudio>=0.2.13
+wave
+
+# Database
+# SQLite is built-in with Python, no extra install needed
+
+# Utilities
+requests>=2.31.0
