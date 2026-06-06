@@ -123,6 +123,7 @@ export interface GrammarErrorItem {
   original_text: string;
   corrected_text: string;
   explanation: string;
+  explanation_cn: string;
 }
 
 export interface GrammarResult {

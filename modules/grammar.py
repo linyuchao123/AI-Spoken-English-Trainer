@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.prompts import GRAMMAR_CORRECTION_PROMPT
+from config.prompts import GRAMMAR_CORRECTION_PROMPT, GRAMMAR_MAX_TOKENS_MULTIPLIER
 from modules.llm import get_llm_client, _resolve_model_config
 
 
@@ -45,7 +45,7 @@ def correct_grammar(
             {"role": "user", "content": prompt},
         ],
         temperature=0.1,  # low temperature for deterministic corrections
-        max_tokens=500,
+        max_tokens=max(500, len(text) * GRAMMAR_MAX_TOKENS_MULTIPLIER),
     )
 
     raw = response.choices[0].message.content.strip()
