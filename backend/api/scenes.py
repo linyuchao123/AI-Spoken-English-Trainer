@@ -8,8 +8,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from fastapi import APIRouter
-from backend.models.schemas import SceneResponse, DifficultyResponse, ScenesConfigResponse
-from config.settings import SCENES, DIFFICULTY_LEVELS
+from backend.models.schemas import (
+    SceneResponse,
+    DifficultyResponse,
+    ModelResponse,
+    ScenesConfigResponse,
+)
+from config.settings import SCENES, DIFFICULTY_LEVELS, LLM_MODELS
 
 router = APIRouter(prefix="/api/scenes", tags=["scenes"])
 
@@ -36,8 +41,18 @@ async def get_scenes():
         for key, level in DIFFICULTY_LEVELS.items()
     ]
 
+    models = [
+        ModelResponse(
+            key=key,
+            name=cfg["name"],
+            icon=cfg["icon"],
+            description=cfg["description"],
+        )
+        for key, cfg in LLM_MODELS.items()
+    ]
+
     return ScenesConfigResponse(
         scenes=scenes,
         difficulties=difficulties,
-        models=["openai", "deepseek"],
+        models=models,
     )

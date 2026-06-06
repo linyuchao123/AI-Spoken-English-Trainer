@@ -1,7 +1,10 @@
 """
-LLM conversation engine — supports OpenAI GPT-4o and DeepSeek dual models.
-Provides client factory, model name resolution, and reply generation with
-scene×difficulty contextual prompts.
+LLM conversation engine — multi-model support with per-model style injection
+and dynamic opening-line generation.
+
+Supported models are configured in :mod:`config.settings.LLM_MODELS`.
+Each model has a ``style`` hint that is appended to the system prompt to give
+each model a distinct conversational personality.
 """
 
 import os
@@ -15,25 +18,32 @@ from config.settings import (
     OPENAI_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
-    OPENAI_LLM_MODEL,
-    DEEPSEEK_LLM_MODEL,
+    LLM_MODELS,
 )
 from config.prompts import SCENE_PROMPTS
 
 
-def get_llm_client(model_type: str = "openai") -> OpenAI:
-    """Factory: return an OpenAI-compatible client for the chosen model.
+# ============================================================
+# Client helpers
+# ============================================================
 
-    Args:
-        model_type: ``"openai"`` or ``"deepseek"``.
+def _resolve_model_config(model_key: str) -> dict:
+    """Look up a model entry in LLM_MODELS.  Raises ValueError on miss."""
+    cfg = LLM_MODELS.get(model_key)
+    if cfg is None:
+        raise ValueError(
+            f"Unknown model key: {model_key!r}. "
+            f"Available: {list(LLM_MODELS.keys())}"
+        )
+    return cfg
 
-    Returns:
-        Configured OpenAI client instance.
 
-    Raises:
-        ValueError: If the required API key is missing from the environment.
-    """
-    if model_type == "deepseek":
+def get_llm_client(model_key: str) -> OpenAI:
+    """Factory: return an OpenAI-compatible client for *model_key*."""
+    cfg = _resolve_model_config(model_key)
+    provider = cfg["provider"]
+
+    if provider == "deepseek":
         if not DEEPSEEK_API_KEY:
             raise ValueError(
                 "DEEPSEEK_API_KEY is not configured. "
@@ -41,7 +51,7 @@ def get_llm_client(model_type: str = "openai") -> OpenAI:
             )
         return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
-    # Default: OpenAI
+    # provider == "openai" (or future providers defaulting to OpenAI)
     if not OPENAI_API_KEY:
         raise ValueError(
             "OPENAI_API_KEY is not configured. "
@@ -50,40 +60,12 @@ def get_llm_client(model_type: str = "openai") -> OpenAI:
     return OpenAI(api_key=OPENAI_API_KEY)
 
 
-def get_model_name(model_type: str = "openai") -> str:
-    """Resolve the LLM model identifier for the given provider."""
-    if model_type == "deepseek":
-        return DEEPSEEK_LLM_MODEL
-    return OPENAI_LLM_MODEL
+# ============================================================
+# Core generation
+# ============================================================
 
-
-def generate_reply(
-    messages_history: list[dict],
-    scene_key: str,
-    difficulty: str,
-    model_type: str = "openai",
-) -> str:
-    """Generate an AI conversation reply using the scene×difficulty prompt.
-
-    Args:
-        messages_history:
-            Ordered list of recent messages, each as
-            ``{"role": "user"|"ai", "content": "..."}``.
-        scene_key:
-            One of ``"job_interview"``, ``"restaurant"``, ``"business_meeting"``.
-        difficulty:
-            One of ``"beginner"``, ``"intermediate"``, ``"advanced"``.
-        model_type:
-            ``"openai"`` (default) or ``"deepseek"``.
-
-    Returns:
-        The AI assistant's reply as a plain English string.
-
-    Raises:
-        ValueError: If the scene key or difficulty is unknown.
-        openai.APIError: If the LLM API call fails.
-    """
-    # ── Resolve scene prompt ──────────────────────────────────────────
+def _build_system_prompt(scene_key: str, difficulty: str, model_key: str) -> str:
+    """Build the full system prompt: scene×difficulty prompt + model style."""
     scene_prompts = SCENE_PROMPTS.get(scene_key)
     if scene_prompts is None:
         raise ValueError(f"Unknown scene key: {scene_key!r}")
@@ -94,24 +76,111 @@ def generate_reply(
             f"Unknown difficulty {difficulty!r} for scene {scene_key!r}"
         )
 
-    system_prompt = prompt_config["system_prompt"]
+    cfg = _resolve_model_config(model_key)
+    style_hint = cfg.get("style", "")
 
-    # ── Build message list for LLM ────────────────────────────────────
+    base_prompt = prompt_config["system_prompt"]
+    if style_hint:
+        return f"{base_prompt}\n\n[SPEAKING STYLE]: {style_hint}"
+    return base_prompt
+
+
+def generate_reply(
+    messages_history: list[dict],
+    scene_key: str,
+    difficulty: str,
+    model_key: str = "gpt-4o",
+) -> str:
+    """Generate an AI conversation reply.
+
+    Args:
+        messages_history:
+            Ordered list of ``{"role": "user"|"ai", "content": "..."}``.
+        scene_key:
+            ``"job_interview"`` | ``"restaurant"`` | ``"business_meeting"``.
+        difficulty:
+            ``"beginner"`` | ``"intermediate"`` | ``"advanced"``.
+        model_key:
+            Any key from ``LLM_MODELS`` (e.g. ``"gpt-4o"``, ``"deepseek-chat"``).
+
+    Returns:
+        The AI assistant's reply as a plain English string.
+    """
+    system_prompt = _build_system_prompt(scene_key, difficulty, model_key)
+
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
-
     for msg in messages_history:
         role = "assistant" if msg["role"] == "ai" else "user"
         messages.append({"role": role, "content": msg["content"]})
 
-    # ── Call LLM ──────────────────────────────────────────────────────
-    client = get_llm_client(model_type)
-    model_name = get_model_name(model_type)
+    cfg = _resolve_model_config(model_key)
+    client = get_llm_client(model_key)
 
     response = client.chat.completions.create(
-        model=model_name,
+        model=cfg["model_id"],
         messages=messages,
         temperature=0.7,
         max_tokens=200,
     )
-
     return response.choices[0].message.content
+
+
+# ============================================================
+# Dynamic opening lines
+# ============================================================
+
+def generate_opening(
+    scene_key: str,
+    difficulty: str,
+    model_key: str = "gpt-4o",
+) -> str:
+    """Generate a unique AI opening line tailored to scene, difficulty, and model.
+
+    Instead of using a hard-coded ``first_message``, this calls the LLM with a
+    special "generate opening" instruction so that **every model produces a
+    different opening greeting** for the same scene×difficulty combination.
+
+    Args:
+        scene_key / difficulty / model_key:
+            Same as :func:`generate_reply`.
+
+    Returns:
+        A one- or two-sentence English opening line.
+    """
+    # ── Get scene meta for context ──────────────────────────────────
+    scene_prompts = SCENE_PROMPTS.get(scene_key)
+    if scene_prompts is None:
+        raise ValueError(f"Unknown scene key: {scene_key!r}")
+    prompt_config = scene_prompts.get(difficulty)
+    if prompt_config is None:
+        raise ValueError(
+            f"Unknown difficulty {difficulty!r} for scene {scene_key!r}"
+        )
+
+    cfg = _resolve_model_config(model_key)
+    style_hint = cfg.get("style", "")
+
+    # ── Build the opening-generation system prompt ──────────────────
+    scene_desc = prompt_config["system_prompt"][:500]  # summary for context
+    opening_prompt = (
+        f"{scene_desc}\n\n"
+        f"You are about to start a conversation. "
+        f"Generate a single natural opening greeting (1-2 sentences only) "
+        f"to begin the interaction. Do NOT include explanations or notes — "
+        f"output ONLY the greeting itself."
+    )
+    if style_hint:
+        opening_prompt += f"\n\n[SPEAKING STYLE]: {style_hint}"
+
+    # ── Call LLM ────────────────────────────────────────────────────
+    client = get_llm_client(model_key)
+    response = client.chat.completions.create(
+        model=cfg["model_id"],
+        messages=[
+            {"role": "system", "content": opening_prompt},
+            {"role": "user", "content": "Start the conversation now."},
+        ],
+        temperature=0.9,  # higher for creative variety
+        max_tokens=80,
+    )
+    return response.choices[0].message.content.strip()

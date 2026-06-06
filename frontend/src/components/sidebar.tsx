@@ -13,11 +13,6 @@ import {
   Zap,
 } from "lucide-react";
 
-const MODEL_LABELS: Record<string, { icon: string; label: string; desc: string }> = {
-  openai: { icon: "🧠", label: "OpenAI GPT-4o", desc: "对话最自然流畅，推荐使用" },
-  deepseek: { icon: "🔍", label: "DeepSeek", desc: "国产模型，成本极低" },
-};
-
 const DIFFICULTY_ICONS: Record<string, string> = {
   beginner: "🌱",
   intermediate: "🌿",
@@ -125,12 +120,11 @@ export default function Sidebar() {
           <SectionTitle icon={<Bot className="w-3.5 h-3.5" />} text="AI 模型" />
           <div className="flex gap-2">
             {models.map((m) => {
-              const isActive = currentModel === m;
-              const info = MODEL_LABELS[m] || { icon: "🤖", label: m, desc: "" };
+              const isActive = currentModel === m.key;
               return (
                 <button
-                  key={m}
-                  onClick={() => setCurrentModel(m)}
+                  key={m.key}
+                  onClick={() => setCurrentModel(m.key)}
                   className={`
                     flex-1 py-2 rounded-full text-[11px] font-medium border transition-all duration-200
                     ${
@@ -140,16 +134,19 @@ export default function Sidebar() {
                     }
                   `}
                 >
-                  {info.icon} {info.label}
+                  {m.icon} {m.name}
                 </button>
               );
             })}
           </div>
-          {MODEL_LABELS[currentModel] && (
-            <p className="text-[11px] text-white/40 mt-1.5 px-1 italic">
-              {MODEL_LABELS[currentModel].desc}
-            </p>
-          )}
+          {(() => {
+            const cur = models.find((m) => m.key === currentModel);
+            return cur ? (
+              <p className="text-[11px] text-white/40 mt-1.5 px-1 italic">
+                {cur.description}
+              </p>
+            ) : null;
+          })()}
         </div>
 
         <div className="h-px bg-white/8 my-5" />
