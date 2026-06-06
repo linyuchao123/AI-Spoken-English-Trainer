@@ -60,16 +60,22 @@ SCENES = {
         "name": "职场面试",
         "icon": "💼",
         "description": "模拟英文工作面试场景",
+        "image": "/scenes/job_interview.jpg",
+        "overlay_color": "rgba(30, 41, 59, 0.55)",
     },
     "restaurant": {
         "name": "餐厅点餐",
         "icon": "🍽️",
         "description": "模拟英文餐厅点餐场景",
+        "image": "/scenes/restaurant.jpg",
+        "overlay_color": "rgba(44, 28, 12, 0.50)",
     },
     "business_meeting": {
         "name": "商务会议",
         "icon": "📊",
         "description": "模拟英文商务会议场景",
+        "image": "/scenes/business_meeting.jpg",
+        "overlay_color": "rgba(20, 30, 48, 0.55)",
     },
 }
 

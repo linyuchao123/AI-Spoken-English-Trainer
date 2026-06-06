@@ -1,11 +1,13 @@
 """
 SQLite database module for the AI Spoken English Trainer.
-Manages sessions, messages, pronunciation scores, and grammar corrections.
+Manages users, sessions, messages, pronunciation scores, and grammar corrections.
 """
 
 import sqlite3
 import json
 import os
+import hashlib
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -30,8 +32,19 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            username TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            avatar_url TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER DEFAULT NULL,
             scene_key TEXT NOT NULL,
             scene_name TEXT NOT NULL,
             difficulty TEXT NOT NULL,
@@ -40,7 +53,8 @@ def init_db():
             ended_at TIMESTAMP,
             total_rounds INTEGER DEFAULT 0,
             avg_pronunciation_score REAL DEFAULT 0.0,
-            status TEXT DEFAULT 'active'
+            status TEXT DEFAULT 'active',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS messages (
@@ -89,16 +103,94 @@ def init_db():
 
 
 # ============================================================
+# User Operations
+# ============================================================
+
+def hash_password(password: str, salt: str = None) -> tuple:
+    """Hash a password with a salt using SHA-256. Returns (hash, salt)."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    salted = salt + password
+    password_hash = hashlib.sha256(salted.encode('utf-8')).hexdigest()
+    return password_hash, salt
+
+
+def verify_password(password: str, salt: str, stored_hash: str) -> bool:
+    """Verify a password against the stored hash."""
+    salted = salt + password
+    computed_hash = hashlib.sha256(salted.encode('utf-8')).hexdigest()
+    return computed_hash == stored_hash
+
+
+def create_user(email: str, username: str, password: str) -> Optional[int]:
+    """Create a new user. Returns user ID or None if email already exists."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        password_hash, salt = hash_password(password)
+        cursor.execute(
+            "INSERT INTO users (email, username, password_hash, salt) VALUES (?, ?, ?, ?)",
+            (email.strip().lower(), username.strip(), password_hash, salt),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        return user_id
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
+
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    """Get a user by email."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Get a user by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def authenticate_user(email: str, password: str) -> Optional[dict]:
+    """Authenticate a user by email and password. Returns user dict or None."""
+    user = get_user_by_email(email)
+    if not user:
+        return None
+    if verify_password(password, user["salt"], user["password_hash"]):
+        return user
+    return None
+
+
+def update_user_avatar(user_id: int, avatar_url: str):
+    """Update a user's avatar URL."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (avatar_url, user_id))
+    conn.commit()
+    conn.close()
+
+
+# ============================================================
 # Session Operations
 # ============================================================
 
-def create_session(scene_key: str, scene_name: str, difficulty: str, model: str) -> int:
+def create_session(scene_key: str, scene_name: str, difficulty: str, model: str, user_id: int = None) -> int:
     """Create a new practice session. Returns session ID."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO sessions (scene_key, scene_name, difficulty, model) VALUES (?, ?, ?, ?)",
-        (scene_key, scene_name, difficulty, model),
+        "INSERT INTO sessions (user_id, scene_key, scene_name, difficulty, model) VALUES (?, ?, ?, ?, ?)",
+        (user_id, scene_key, scene_name, difficulty, model),
     )
     conn.commit()
     session_id = cursor.lastrowid
@@ -145,16 +237,35 @@ def get_session(session_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def get_active_session() -> Optional[dict]:
-    """Get the most recent active session."""
+def get_active_session(user_id: int = None) -> Optional[dict]:
+    """Get the most recent active session, optionally filtered by user."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
-    )
+    if user_id:
+        cursor.execute(
+            "SELECT * FROM sessions WHERE status = 'active' AND user_id = ? ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+        )
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def get_user_sessions(user_id: int, limit: int = 20) -> list[dict]:
+    """Get all sessions for a specific user, most recent first."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 # ============================================================

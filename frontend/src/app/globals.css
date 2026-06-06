@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Design Tokens
+   ============================================================ */
+
+:root {
+  /* Primary - Warm Indigo / Deep Violet */
+  --primary: #5B4FCF;
+  --primary-dark: #4338CA;
+  --primary-light: #8B83E0;
+  --primary-gradient: linear-gradient(135deg, #5B4FCF 0%, #7C6FF7 50%, #9B8FFF 100%);
+
+  /* Accent - Warm Amber / Gold */
+  --accent: #C8956C;
+  --accent-light: #E0B894;
+
+  /* Backgrounds */
+  --bg-main: #FAFAF8;
+  --bg-card: #FFFFFF;
+  --bg-sidebar: linear-gradient(180deg, #1A1D28 0%, #232738 50%, #2A2E3D 100%);
+  --bg-navbar: rgba(26, 29, 40, 0.97);
+
+  /* Text */
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-light: #94A3B8;
+
+  /* States */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+
+  /* Borders & Shadows */
+  --border: #E8ECF1;
+  --border-light: #F1F5F9;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.12);
+  --shadow-glow: 0 4px 20px rgba(91,79,207,0.25);
+
+  /* Radii */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+}
+
+@theme inline {
+  --color-primary: #5B4FCF;
+  --color-primary-dark: #4338CA;
+  --color-primary-light: #8B83E0;
+  --color-accent: #C8956C;
+  --color-bg-main: #FAFAF8;
+  --color-bg-card: #FFFFFF;
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-text-light: #94A3B8;
+  --color-border: #E8ECF1;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #3B82F6;
+  --color-navbar: #1A1D28;
+  --color-sidebar: #1A1D28;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+
+body {
+  background: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(91, 79, 207, 0.4); }
+  70% { box-shadow: 0 0 0 12px rgba(91, 79, 207, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(91, 79, 207, 0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.35s ease-out both;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
