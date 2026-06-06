@@ -3,7 +3,9 @@
 > 一款基于 AI 的英语口语练习工具，支持多种真实场景下的对话训练、实时发音评测、语法纠错和课后量化学习报告。
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-red.svg)](https://streamlit.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -30,13 +32,17 @@ AI英语口语陪练是一个面向英语学习者的智能口语练习平台。
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| 前端框架 | **Streamlit** | Python全栈Web框架 |
+| 前端框架 | **Next.js 14** + TypeScript + Tailwind CSS | React 全栈框架，App Router 路由 |
+| UI 组件库 | **Shadcn/ui** + Lucide Icons | 可定制 React 组件 |
+| 状态管理 | **Zustand** | 轻量级全局状态管理 |
+| 后端框架 | **FastAPI** + Uvicorn | Python 异步 Web 框架 |
+| 认证 | **JWT** HTTP-only Cookie | 无状态身份认证 |
+| 数据库 | **SQLite** | 本地轻量数据库 |
 | 语音识别 (ASR) | **OpenAI Whisper API** | 英文语音转文字 |
 | 大语言模型 (LLM) | **OpenAI GPT-4o / DeepSeek** | 场景化英文对话 |
 | 发音评测 | **Azure Pronunciation Assessment** | 音素级发音评分 |
 | 语音合成 (TTS) | **OpenAI TTS / Azure Speech TTS** | 文本转语音输出 |
-| 数据可视化 | **Plotly** | 交互式图表 |
-| 数据存储 | **SQLite** | 会话记录和评分历史 |
+| 数据可视化 | **Plotly / Recharts** | 交互式图表 |
 
 ---
 
@@ -44,26 +50,29 @@ AI英语口语陪练是一个面向英语学习者的智能口语练习平台。
 
 ```
 AI-Spoken-English-Trainer/
-├── app.py                      # Streamlit 主入口
+├── backend/                    # FastAPI 后端
+│   ├── main.py                 # FastAPI 主入口
+│   ├── api/
+│   │   ├── auth.py             # 认证接口
+│   │   ├── scenes.py           # 场景配置接口
+│   │   └── sessions.py         # 会话管理接口
+│   ├── core/
+│   │   └── auth.py             # JWT 认证核心
+│   └── models/
+│       └── schemas.py          # Pydantic 数据模型
+├── frontend/                   # Next.js 前端
+│   └── src/
+│       ├── app/                # App Router 页面
+│       │   ├── (auth)/         # 登录/注册
+│       │   └── (main)/         # 主应用（练习/历史/报告等）
+│       ├── components/         # Navbar, Sidebar
+│       ├── lib/api.ts          # Axios API 客户端
+│       └── stores/             # Zustand 状态管理
 ├── config/
 │   ├── settings.py             # 全局配置与API密钥管理
 │   └── prompts.py              # 9套场景×难度 Prompt 模板
-├── modules/                    # 核心功能模块（PR2-PR3实现）
-│   ├── asr.py                  # 语音识别模块
-│   ├── llm.py                  # LLM对话模块
-│   ├── pronunciation.py        # 发音评测模块
-│   ├── grammar.py              # 语法纠错模块
-│   ├── tts.py                  # 语音合成模块
-│   └── report.py               # 报告生成模块
-├── ui/                         # UI组件
-│   ├── sidebar.py              # 侧边栏（场景/难度/模型选择）
-│   ├── chat.py                 # 对话界面与聊天气泡
-│   └── report.py               # 报告页面（PR3实现）
 ├── utils/
-│   ├── audio.py                # 音频处理工具（PR2实现）
 │   └── db.py                   # SQLite数据库操作
-├── assets/
-│   └── style.css               # 自定义CSS样式
 ├── data/                       # 数据库文件目录
 ├── requirements.txt            # Python依赖
 ├── .env.example                # 环境变量模板
@@ -76,8 +85,9 @@ AI-Spoken-English-Trainer/
 
 ### 1. 环境要求
 
-- Python 3.10+
-- pip (Python包管理器)
+- Python 3.10+ (后端)
+- Node.js 18+ (前端)
+- npm 或 pnpm (前端包管理器)
 - 麦克风设备（用于语音输入）
 
 ### 2. 安装依赖
@@ -86,6 +96,7 @@ AI-Spoken-English-Trainer/
 git clone <repository-url>
 cd AI-Spoken-English-Trainer
 
+# === 后端 ===
 python -m venv venv
 
 # Windows:
@@ -94,6 +105,11 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
+
+# === 前端 ===
+cd frontend
+npm install
+cd ..
 ```
 
 ### 3. 配置API密钥
@@ -114,10 +130,17 @@ cp .env.example .env
 ### 4. 启动应用
 
 ```bash
-streamlit run app.py
+# 终端1：启动后端
+uvicorn backend.main:app --reload --port 8000
+
+# 终端2：启动前端
+cd frontend
+npm run dev
 ```
 
-启动后浏览器自动打开 `http://localhost:8501`，即可开始使用。
+启动后：
+- 后端 API：http://localhost:8000
+- 前端页面：http://localhost:3000
 
 ---
 
@@ -153,9 +176,9 @@ streamlit run app.py
 
 | PR | 日期 | 内容 | 状态 |
 |----|------|------|------|
-| PR1 | 6.5 | 项目初始化、目录搭建、Streamlit基础框架、Prompt配置 | 已完成 |
-| PR2 | 6.6 | 核心语音交互：ASR转写+LLM对话+TTS+语法纠错 | 待开始 |
-| PR3 | 6.7 | 发音评测接入、量化报告生成、UI优化+异常处理 | 待开始 |
+| PR1 | 6.5 | 项目初始化、Next.js+FastAPI架构搭建、认证系统、数据库设计 | ✅ 已完成 |
+| PR2 | 6.6 | 核心语音交互：LLM对话引擎+语法纠错+ASR转写+TTS合成 | 🔜 待开始 |
+| PR3 | 6.7 | 发音评测接入、报告生成、前端数据对接与UI优化 | 🔜 待开始 |
 
 ---
 
@@ -163,14 +186,21 @@ streamlit run app.py
 
 | 库名 | 版本 | 用途 | 许可证 |
 |------|------|------|--------|
-| streamlit | >=1.31.0 | Web应用框架 | Apache 2.0 |
-| openai | >=1.12.0 | OpenAI API客户端 | Apache 2.0 |
-| azure-cognitiveservices-speech | >=1.35.0 | Azure语音服务 | MIT |
+| fastapi | >=0.111.0 | Web API 框架 | MIT |
+| uvicorn | >=0.30.0 | ASGI 服务器 | BSD-3 |
+| PyJWT | >=2.8.0 | JWT 令牌管理 | MIT |
+| openai | >=1.12.0 | OpenAI API 客户端 | Apache 2.0 |
+| azure-cognitiveservices-speech | >=1.35.0 | Azure 语音服务 | MIT |
 | python-dotenv | >=1.0.0 | 环境变量管理 | BSD-3 |
 | plotly | >=5.18.0 | 数据可视化 | MIT |
 | pandas | >=2.1.0 | 数据处理 | BSD-3 |
-| numpy | >=1.26.0 | 数值计算 | BSD-3 |
-| pyaudio | >=0.2.13 | 音频采集 | MIT |
+| pydantic | >=2.0 | 数据验证 | MIT |
+| next | 14.x | React 前端框架 | MIT |
+| react | 18.x | UI 库 | MIT |
+| tailwindcss | 3.x | CSS 框架 | MIT |
+| zustand | 4.x | 状态管理 | MIT |
+| axios | 1.x | HTTP 客户端 | MIT |
+| lucide-react | 0.x | 图标库 | ISC |
 
 ---
 
