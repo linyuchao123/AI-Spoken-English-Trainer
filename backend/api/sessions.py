@@ -25,6 +25,8 @@ from utils.db import (
     add_message,
 )
 from config.settings import SCENES
+from config.prompts import SCENE_PROMPTS
+from modules.llm import generate_reply
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -46,7 +48,7 @@ def _session_to_response(s: dict) -> SessionResponse:
 
 @router.post("", response_model=SessionResponse)
 async def create_new_session(req: CreateSessionRequest, request: Request):
-    """Create a new practice session."""
+    """Create a new practice session and add the AI's opening greeting."""
     user = require_auth(request)
     user_id = int(user["sub"])
 
@@ -66,6 +68,11 @@ async def create_new_session(req: CreateSessionRequest, request: Request):
         model=req.model,
         user_id=user_id,
     )
+
+    # ── Add the AI's first greeting message ──────────────────────────
+    prompt_config = SCENE_PROMPTS.get(req.scene_key, {}).get(req.difficulty)
+    if prompt_config:
+        add_message(session_id, "ai", prompt_config["first_message"])
 
     session = get_session(session_id)
     return _session_to_response(session)
@@ -132,7 +139,7 @@ async def get_messages(session_id: int, request: Request):
 
 @router.post("/{session_id}/messages", response_model=list[MessageResponse])
 async def send_message(session_id: int, req: SendMessageRequest, request: Request):
-    """Send a message and get an AI response (placeholder)."""
+    """Send a user message and get an AI reply via the LLM conversation engine."""
     user = require_auth(request)
 
     session = get_session(session_id)
@@ -141,13 +148,36 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     if session["status"] != "active":
         raise HTTPException(status_code=400, detail="Session is not active.")
 
-    # Add user message
-    user_msg_id = add_message(session_id, "user", req.content)
+    # 1. Persist user message
+    add_message(session_id, "user", req.content)
 
-    # Placeholder AI response (will be replaced with actual LLM call later)
-    ai_response = f"[AI Placeholder] You said: \"{req.content}\". AI conversation will be implemented in a future update."
-    ai_msg_id = add_message(session_id, "ai", ai_response)
+    # 2. Build conversation history (last 20 messages for context)
+    all_messages = get_session_messages(session_id)
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in all_messages[-20:]
+    ]
 
+    # 3. Generate AI reply via LLM
+    try:
+        ai_response = generate_reply(
+            messages_history=history,
+            scene_key=session["scene_key"],
+            difficulty=session["difficulty"],
+            model_type=session["model"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM service error: {str(exc)}. Please try again or switch model.",
+        )
+
+    # 4. Persist AI response
+    add_message(session_id, "ai", ai_response)
+
+    # 5. Return full message list
     messages = get_session_messages(session_id)
     return [
         MessageResponse(
