@@ -20,20 +20,53 @@ AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 # ============================================================
 # Model Selection
 # ============================================================
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "openai")  # "openai" or "deepseek"
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4o")
 
 # ============================================================
-# OpenAI Model Configurations
+# LLM Models Configuration
 # ============================================================
-OPENAI_LLM_MODEL = "gpt-4o"
+# Each model entry: provider, model_id, display info, and a style hint
+# that is injected into the system prompt to differentiate conversation tone.
+LLM_MODELS = {
+    "gpt-4o": {
+        "name": "GPT-4o",
+        "icon": "🧠",
+        "description": "OpenAI 旗舰，对话最自然流畅",
+        "provider": "openai",
+        "model_id": "gpt-4o",
+        "style": "Speak warmly and naturally with rich, engaging vocabulary. "
+                 "Your tone should be encouraging and conversational, like a friendly native speaker.",
+    },
+    "gpt-4o-mini": {
+        "name": "GPT-4o Mini",
+        "icon": "⚡",
+        "description": "轻量快速，响应简洁高效",
+        "provider": "openai",
+        "model_id": "gpt-4o-mini",
+        "style": "Speak concisely and directly with simple, clear language. "
+                 "Keep responses short and to the point, like a helpful but efficient conversation partner.",
+    },
+    "deepseek-chat": {
+        "name": "DeepSeek",
+        "icon": "🔍",
+        "description": "国产模型，成本极低",
+        "provider": "deepseek",
+        "model_id": "deepseek-chat",
+        "style": "Speak practically and straightforwardly with clear explanations. "
+                 "Use a helpful, instructional tone — like a patient teacher guiding a student.",
+    },
+}
+
+# ============================================================
+# OpenAI Model Configurations (ASR / TTS — not LLM)
+# ============================================================
 OPENAI_ASR_MODEL = "whisper-1"
 OPENAI_TTS_MODEL = "tts-1"
 OPENAI_TTS_VOICE = "alloy"  # Options: alloy, echo, fable, onyx, nova, shimmer
 
 # ============================================================
-# DeepSeek Model Configurations
+# DeepSeek Base URL
 # ============================================================
-DEEPSEEK_LLM_MODEL = "deepseek-chat"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 # ============================================================

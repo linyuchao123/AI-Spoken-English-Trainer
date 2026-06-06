@@ -25,8 +25,7 @@ from utils.db import (
     add_message,
 )
 from config.settings import SCENES
-from config.prompts import SCENE_PROMPTS
-from modules.llm import generate_reply
+from modules.llm import generate_reply, generate_opening
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -48,7 +47,7 @@ def _session_to_response(s: dict) -> SessionResponse:
 
 @router.post("", response_model=SessionResponse)
 async def create_new_session(req: CreateSessionRequest, request: Request):
-    """Create a new practice session and add the AI's opening greeting."""
+    """Create a new practice session with a dynamic AI opening greeting."""
     user = require_auth(request)
     user_id = int(user["sub"])
 
@@ -69,10 +68,22 @@ async def create_new_session(req: CreateSessionRequest, request: Request):
         user_id=user_id,
     )
 
-    # ── Add the AI's first greeting message ──────────────────────────
-    prompt_config = SCENE_PROMPTS.get(req.scene_key, {}).get(req.difficulty)
-    if prompt_config:
-        add_message(session_id, "ai", prompt_config["first_message"])
+    # ── Generate AI opening greeting dynamically per model ──────────
+    try:
+        opening = generate_opening(
+            scene_key=req.scene_key,
+            difficulty=req.difficulty,
+            model_key=req.model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM service error: {str(exc)}. Please try again or switch model.",
+        )
+
+    add_message(session_id, "ai", opening)
 
     session = get_session(session_id)
     return _session_to_response(session)
@@ -164,7 +175,7 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
             messages_history=history,
             scene_key=session["scene_key"],
             difficulty=session["difficulty"],
-            model_type=session["model"],
+            model_key=session["model"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

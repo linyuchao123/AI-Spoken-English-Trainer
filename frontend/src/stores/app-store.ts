@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Scene, Difficulty, ScenesConfig, scenesApi, Session, sessionsApi } from "@/lib/api";
+import { Scene, Difficulty, Model, ScenesConfig, scenesApi, Session, sessionsApi } from "@/lib/api";
 
 interface AppState {
   // UI
@@ -10,7 +10,7 @@ interface AppState {
   // Config
   scenes: Scene[];
   difficulties: Difficulty[];
-  models: string[];
+  models: Model[];
   configLoaded: boolean;
   loadConfig: () => Promise<void>;
 
@@ -38,7 +38,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Config
   scenes: [],
   difficulties: [],
-  models: ["openai", "deepseek"],
+  models: [],
   configLoaded: false,
 
   loadConfig: async () => {
@@ -51,7 +51,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         configLoaded: true,
         currentScene: data.scenes[0]?.key || "job_interview",
         currentDifficulty: data.difficulties[0]?.key || "beginner",
-        currentModel: data.models[0] || "openai",
+        currentModel: data.models[0]?.key || "gpt-4o",
       });
     } catch (err) {
       console.error("Failed to load config:", err);
@@ -62,7 +62,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Current selections
   currentScene: "job_interview",
   currentDifficulty: "beginner",
-  currentModel: "openai",
+  currentModel: "gpt-4o",
   setCurrentScene: (key) => set({ currentScene: key }),
   setCurrentDifficulty: (key) => set({ currentDifficulty: key }),
   setCurrentModel: (key) => set({ currentModel: key }),

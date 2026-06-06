@@ -51,10 +51,17 @@ class DifficultyResponse(BaseModel):
     color: str
 
 
+class ModelResponse(BaseModel):
+    key: str
+    name: str
+    icon: str
+    description: str
+
+
 class ScenesConfigResponse(BaseModel):
     scenes: list[SceneResponse]
     difficulties: list[DifficultyResponse]
-    models: list[str]
+    models: list[ModelResponse]
 
 
 # ============================================================

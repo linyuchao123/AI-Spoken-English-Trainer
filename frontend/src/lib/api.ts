@@ -55,10 +55,17 @@ export interface Difficulty {
   color: string;
 }
 
+export interface Model {
+  key: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
 export interface ScenesConfig {
   scenes: Scene[];
   difficulties: Difficulty[];
-  models: string[];
+  models: Model[];
 }
 
 export const scenesApi = {
