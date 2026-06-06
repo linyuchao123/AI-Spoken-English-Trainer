@@ -1,9 +1,87 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { sessionsApi, Message, ttsApi } from "@/lib/api";
 import { Mic, Send, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
+
+/* ---------- Web Speech API Hook ---------- */
+interface SpeechState {
+  isListening: boolean;
+  isSupported: boolean;
+  transcript: string;
+  error: string;
+}
+
+function useSpeechRecognition() {
+  const [state, setState] = useState<SpeechState>({
+    isListening: false, isSupported: false, transcript: "", error: "",
+  });
+  const recognitionRef = useRef<any>(null);
+  const shouldRestart = useRef(false);
+  const finalTextRef = useRef("");
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { setState((s) => ({ ...s, isSupported: false })); return; }
+    setState((s) => ({ ...s, isSupported: true }));
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) { finalTextRef.current += " " + r[0].transcript; }
+        else { interim += r[0].transcript; }
+      }
+      const display = (finalTextRef.current + " " + interim).trim();
+      setState((s) => ({ ...s, transcript: display }));
+    };
+
+    recognition.onerror = (event: any) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      setState((s) => ({ ...s, error: event.error, isListening: false }));
+    };
+
+    recognition.onend = () => {
+      if (shouldRestart.current) {
+        try { recognition.start(); } catch { /* already started */ }
+      } else {
+        setState((s) => ({ ...s, isListening: false }));
+      }
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      shouldRestart.current = false;
+      try { recognition.stop(); } catch { /* ignore */ }
+    };
+  }, []);
+
+  const start = useCallback(() => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    shouldRestart.current = true;
+    finalTextRef.current = "";
+    setState((s) => ({ ...s, isListening: true, error: "", transcript: "" }));
+    try { rec.start(); } catch { /* already started */ }
+  }, []);
+
+  const stop = useCallback(() => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    shouldRestart.current = false;
+    setState((s) => ({ ...s, isListening: false }));
+    try { rec.stop(); } catch { /* ignore */ }
+  }, []);
+
+  return { ...state, start, stop };
+}
 
 function playBase64Audio(base64: string, format = "mp3"): Promise<void> {
   return new Promise((resolve) => {
@@ -54,6 +132,20 @@ export default function PracticePage() {
   const [sending, setSending] = useState(false);
   const [speakingMap, setSpeakingMap] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeechRecognition();
+
+  // Sync speech transcript to input
+  useEffect(() => { if (speech.transcript) setInput(speech.transcript); }, [speech.transcript]);
+
+  // Auto-send when speech stops and has content
+  useEffect(() => {
+    if (!speech.isListening && speech.transcript.trim() && activeSession) {
+      const timer = setTimeout(() => {
+        handleSendWithText(speech.transcript.trim());
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [speech.isListening]);
 
   const scene = scenes.find((s) => s.key === currentScene);
   const difficulty = difficulties.find((d) => d.key === currentDifficulty);
@@ -66,10 +158,13 @@ export default function PracticePage() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || !activeSession || sending) return;
-    const text = input.trim(); setInput(""); setSending(true);
-    try { const { data } = await sessionsApi.sendMessage(activeSession.id, text); setMessages(data); }
+  const handleSend = () => handleSendWithText(input);
+
+  const handleSendWithText = async (text: string) => {
+    if (!text.trim() || !activeSession || sending) return;
+    const t = text.trim(); if (t === input.trim()) setInput("");
+    setSending(true);
+    try { const { data } = await sessionsApi.sendMessage(activeSession.id, t); setMessages(data); }
     catch (err) { console.error("Failed to send message:", err); }
     finally { setSending(false); }
   };
@@ -140,14 +235,38 @@ export default function PracticePage() {
       </div>
       <div className="px-6 pb-4 pt-2 shrink-0 border-t border-border/50 bg-white/50 backdrop-blur-sm">
         <div className="flex items-center gap-3 max-w-3xl mx-auto">
-          <button className="w-10 h-10 rounded-full bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] flex items-center justify-center text-white shadow-lg shadow-indigo-200 hover:scale-105 active:scale-95 transition-transform" title="Voice recording (coming soon)">
-            <MicOff className="w-4 h-4" />
-          </button>
+          {/* Mic Button */}
+          {speech.isSupported ? (
+            <button onClick={speech.isListening ? speech.stop : speech.start}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg
+                transition-all duration-300 ${
+                  speech.isListening
+                    ? "bg-red-500 animate-pulse shadow-red-200 scale-110"
+                    : "bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-200 hover:scale-105 active:scale-95"
+                }`}
+              title={speech.isListening ? "Stop recording" : "Start voice input"}
+            >
+              {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+          ) : (
+            <button disabled
+              className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white shadow-md cursor-not-allowed opacity-60"
+              title="Speech recognition not supported in this browser"
+            >
+              <MicOff className="w-4 h-4" />
+            </button>
+          )}
+
           <div className="flex-1 relative">
             <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type your English message here..."
-              className="w-full px-4 py-3 pr-12 rounded-full border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B4FCF]/20 focus:border-[#5B4FCF] transition-all placeholder:text-text-light"
+              placeholder={speech.isListening ? "🎤 Listening... speak now" : "Type or use mic to speak..."}
+              className={`w-full px-4 py-3 pr-12 rounded-full border bg-white text-sm focus:outline-none
+                transition-all placeholder:text-text-light ${
+                  speech.isListening
+                    ? "border-red-400 ring-2 ring-red-400/20"
+                    : "border-border focus:ring-2 focus:ring-[#5B4FCF]/20 focus:border-[#5B4FCF]"
+                }`}
             />
             <button onClick={handleSend} disabled={!input.trim() || sending}
               className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#5B4FCF] text-white flex items-center justify-center hover:bg-[#4338CA] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
@@ -155,7 +274,13 @@ export default function PracticePage() {
             </button>
           </div>
         </div>
-        <p className="text-center text-[10px] text-text-light mt-2">Hover over AI messages to listen · Voice recording coming soon</p>
+        <p className="text-center text-[10px] text-text-light mt-2">
+          {speech.error
+            ? `⚠️ Speech error: ${speech.error} — try again or type manually`
+            : speech.isListening
+              ? "🎤 Recording... click mic again to stop and auto-send"
+              : "Click 🎤 to speak · Hover AI messages to listen · Press Enter to send"}
+        </p>
       </div>
     </div>
   );
