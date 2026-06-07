@@ -6,12 +6,10 @@ import { useAuthStore } from "@/stores/auth-store";
 import { sessionsApi, Message, ttsApi } from "@/lib/api";
 import { Mic, Send, MicOff, Sparkles, Volume2, Bot, User, MessageSquare } from "lucide-react";
 
-/* ──────────── Scene background map ──────────── */
-const SCENE_BG: Record<string, string> = {
-  job_interview: "/scenes/job_interview.jpg",
-  restaurant: "/scenes/restaurant.jpg",
-  business_meeting: "/scenes/business_meeting.jpg",
-};
+/* ──────────── Scene background helper ──────────── */
+function getSceneBg(sceneKey: string, difficulty: string): string {
+  return `/scenes/${sceneKey}/${difficulty}.png`;
+}
 
 /* ──────────── Web Speech Recognition Hook ──────────── */
 interface SpeechState {
@@ -244,7 +242,7 @@ export default function PracticePage() {
   const scene = scenes.find((s) => s.key === activeSession?.scene_key);
   const difficulty = difficulties.find((d) => d.key === activeSession?.difficulty);
   const sceneKey = activeSession?.scene_key || "job_interview";
-  const bgImage = SCENE_BG[sceneKey];
+  const bgImage = getSceneBg(sceneKey, activeSession?.difficulty || "beginner");
   const userInitial = user?.username?.charAt(0).toUpperCase() || "U";
 
   // Sync speech transcript to input
