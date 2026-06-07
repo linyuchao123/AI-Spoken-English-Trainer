@@ -25,7 +25,7 @@ interface AppState {
   // Session
   activeSession: Session | null;
   setActiveSession: (session: Session | null) => void;
-  createSession: () => Promise<void>;
+  createSession: () => Promise<Session | null>;
   endSession: () => Promise<void>;
 }
 
@@ -80,8 +80,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentModel
       );
       set({ activeSession: data });
+      return data;
     } catch (err) {
       console.error("Failed to create session:", err);
+      return null;
     }
   },
 

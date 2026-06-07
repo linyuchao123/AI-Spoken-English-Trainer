@@ -117,6 +117,14 @@ class GrammarError(BaseModel):
     corrected_text: str
     explanation: str
     explanation_cn: str = ""
+    better_expression: str = ""
+
+
+class ExpressionImprovement(BaseModel):
+    original_phrase: str
+    improved_phrase: str
+    explanation: str
+    explanation_cn: str = ""
 
 
 class GrammarResponse(BaseModel):
@@ -124,6 +132,7 @@ class GrammarResponse(BaseModel):
     original: str
     corrected: str
     errors: list[GrammarError]
+    expression_improvements: list[ExpressionImprovement] = []
 
 
 # ============================================================
@@ -161,6 +170,8 @@ class WordScoreResponse(BaseModel):
     word: str
     accuracy_score: float
     error_type: str  # "None", "Omission", "Insertion", "Mispronunciation"
+    expected_pronunciation: str = ""
+    correction_cn: str = ""
 
 
 class PronunciationResponse(BaseModel):
@@ -168,7 +179,18 @@ class PronunciationResponse(BaseModel):
     fluency_score: float = 0
     completeness_score: float = 0
     overall_score: float = 0
+    # Extended scores
+    stress_score: float = 0
+    intonation_score: float = 0
+    rhythm_score: float = 0
+    # Word detail
     words: list[WordScoreResponse] = []
+    # Phoneme highlights
+    phoneme_highlights: list[str] = []
+    # Summary
+    summary_en: str = ""
+    summary_cn: str = ""
+    suggestions: list[str] = []
     error: str = ""
 
 
@@ -179,6 +201,24 @@ class PronunciationResponse(BaseModel):
 class ScorePoint(BaseModel):
     round: int
     score: float
+
+
+class SentenceAnalysisItem(BaseModel):
+    message_index: int
+    original_en: str = ""
+    translation_cn: str = ""
+    pronunciation_issues: list[str] = []
+    grammar_issues: list[str] = []
+    expression_improvements: list[str] = []
+
+
+class ScoreBreakdown(BaseModel):
+    grammar_score: float = 0
+    vocabulary_score: float = 0
+    fluency_score: float = 0
+    expression_score: float = 0
+    naturalness_score: float = 0
+    emotion_score: float = 0
 
 
 class ReportResponse(BaseModel):
@@ -195,10 +235,78 @@ class ReportResponse(BaseModel):
     correction_count: int = 0
     error_stats: dict[str, int] = {}
     score_history: list[ScorePoint] = []
+    score_breakdown: Optional[ScoreBreakdown] = None
     # LLM analysis
     summary: str = ""
+    summary_cn: str = ""
     strengths: list[str] = []
     weaknesses: list[str] = []
     suggestions: list[str] = []
     topics_covered: list[str] = []
     level_assessment: str = ""
+    level_assessment_cn: str = ""
+    # Per-sentence analysis
+    sentence_analyses: list[SentenceAnalysisItem] = []
+
+
+# ============================================================
+# Session Detail Schemas (for history review)
+# ============================================================
+
+class DetailPronunciation(BaseModel):
+    overall_score: float = 0
+    accuracy_score: float = 0
+    fluency_score: float = 0
+    completeness_score: float = 0
+    words: list[WordScoreResponse] = []
+
+
+class DetailGrammar(BaseModel):
+    original_text: str
+    corrected_text: str
+    error_type: str = ""
+    explanation: str = ""
+    explanation_cn: str = ""
+    better_expression: str = ""  # improved expression suggestion
+
+
+class DetailMessage(BaseModel):
+    id: int
+    role: str
+    content: str
+    translation_cn: str = ""
+    pronunciation: Optional[DetailPronunciation] = None
+    grammar: Optional[DetailGrammar] = None
+
+
+class SessionDetailResponse(BaseModel):
+    session_id: int
+    scene_name: str
+    scene_key: str
+    difficulty: str
+    model: str
+    status: str
+    total_rounds: int
+    avg_pronunciation_score: float
+    created_at: str = ""
+    ended_at: str = ""
+    messages: list[DetailMessage] = []
+    evaluation: Optional["EvaluationResponse"] = None
+
+
+# ============================================================
+# Evaluation Schemas
+# ============================================================
+
+class EvaluationResponse(BaseModel):
+    overall_score: float = 0
+    grammar_score: float = 0
+    vocabulary_score: float = 0
+    fluency_score: float = 0
+    expression_score: float = 0
+    naturalness_score: float = 0
+    emotion_score: float = 0
+    summary: str = ""
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    suggestions: list[str] = []

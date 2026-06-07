@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Volume2, Loader2, Play } from "lucide-react";
 import { ttsApi, TTSResult } from "@/lib/api";
 
@@ -15,7 +16,16 @@ function playBase64Audio(base64: string, format = "mp3"): Promise<void> {
 }
 
 export default function TTSPage() {
+  const searchParams = useSearchParams();
   const [text, setText] = useState("");
+
+  // Read text from URL query param (for pronunciation page jump)
+  useEffect(() => {
+    const textParam = searchParams.get("text");
+    if (textParam) {
+      setText(decodeURIComponent(textParam));
+    }
+  }, [searchParams]);
   const [voice, setVoice] = useState("default");
   const [provider, setProvider] = useState("edge");
   const [loading, setLoading] = useState(false);

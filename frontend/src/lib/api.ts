@@ -96,6 +96,62 @@ export interface Message {
   created_at: string | null;
 }
 
+// Session detail (for history review)
+export interface DetailPronunciation {
+  overall_score: number;
+  accuracy_score: number;
+  fluency_score: number;
+  completeness_score: number;
+  words: WordScore[];
+}
+
+export interface DetailGrammar {
+  original_text: string;
+  corrected_text: string;
+  error_type: string;
+  explanation: string;
+  explanation_cn: string;
+  better_expression: string;
+}
+
+export interface DetailMessage {
+  id: number;
+  role: string;
+  content: string;
+  translation_cn: string;
+  pronunciation: DetailPronunciation | null;
+  grammar: DetailGrammar | null;
+}
+
+export interface SessionDetail {
+  session_id: number;
+  scene_name: string;
+  scene_key: string;
+  difficulty: string;
+  model: string;
+  status: string;
+  total_rounds: number;
+  avg_pronunciation_score: number;
+  created_at: string;
+  ended_at: string;
+  messages: DetailMessage[];
+  evaluation: Evaluation | null;
+}
+
+export interface Evaluation {
+  overall_score: number;
+  grammar_score: number;
+  vocabulary_score: number;
+  fluency_score: number;
+  expression_score: number;
+  naturalness_score: number;
+  emotion_score: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+}
+
 export const sessionsApi = {
   create: (scene_key: string, difficulty: string, model: string) =>
     api.post<Session>("/api/sessions", { scene_key, difficulty, model }),
@@ -112,6 +168,12 @@ export const sessionsApi = {
 
   sendMessage: (sessionId: number, content: string) =>
     api.post<Message[]>(`/api/sessions/${sessionId}/messages`, { content }),
+
+  getDetail: (sessionId: number) =>
+    api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),
+
+  delete: (sessionId: number) =>
+    api.delete<{ ok: boolean }>(`/api/sessions/${sessionId}`),
 };
 
 // ============================================================
@@ -124,6 +186,14 @@ export interface GrammarErrorItem {
   corrected_text: string;
   explanation: string;
   explanation_cn: string;
+  better_expression: string;
+}
+
+export interface ExpressionImprovementItem {
+  original_phrase: string;
+  improved_phrase: string;
+  explanation: string;
+  explanation_cn: string;
 }
 
 export interface GrammarResult {
@@ -131,11 +201,22 @@ export interface GrammarResult {
   original: string;
   corrected: string;
   errors: GrammarErrorItem[];
+  expression_improvements: ExpressionImprovementItem[];
+}
+
+export interface ExtractTextResult {
+  text: string;
+  source: string;
 }
 
 export const grammarApi = {
   correct: (text: string, model: string) =>
     api.post<GrammarResult>("/api/grammar/correct", { text, model }),
+  extractText: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<ExtractTextResult>("/api/grammar/extract-text", form);
+  },
 };
 
 // ============================================================
@@ -174,6 +255,8 @@ export interface WordScore {
   word: string;
   accuracy_score: number;
   error_type: string;
+  expected_pronunciation: string;
+  correction_cn: string;
 }
 
 export interface PronunciationResult {
@@ -181,7 +264,14 @@ export interface PronunciationResult {
   fluency_score: number;
   completeness_score: number;
   overall_score: number;
+  stress_score: number;
+  intonation_score: number;
+  rhythm_score: number;
   words: WordScore[];
+  phoneme_highlights: string[];
+  summary_en: string;
+  summary_cn: string;
+  suggestions: string[];
   error: string;
 }
 
@@ -202,6 +292,24 @@ export interface ScorePoint {
   score: number;
 }
 
+export interface ScoreBreakdown {
+  grammar_score: number;
+  vocabulary_score: number;
+  fluency_score: number;
+  expression_score: number;
+  naturalness_score: number;
+  emotion_score: number;
+}
+
+export interface SentenceAnalysisItem {
+  message_index: number;
+  original_en: string;
+  translation_cn: string;
+  pronunciation_issues: string[];
+  grammar_issues: string[];
+  expression_improvements: string[];
+}
+
 export interface ReportData {
   session_id: number;
   scene_name: string;
@@ -216,12 +324,16 @@ export interface ReportData {
   correction_count: number;
   error_stats: Record<string, number>;
   score_history: ScorePoint[];
+  score_breakdown: ScoreBreakdown | null;
   summary: string;
+  summary_cn: string;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   topics_covered: string[];
   level_assessment: string;
+  level_assessment_cn: string;
+  sentence_analyses: SentenceAnalysisItem[];
 }
 
 export const reportApi = {

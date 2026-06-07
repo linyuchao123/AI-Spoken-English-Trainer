@@ -93,6 +93,21 @@ def init_db():
             FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS session_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL UNIQUE,
+            overall_score REAL DEFAULT 0,
+            grammar_score REAL DEFAULT 0,
+            vocabulary_score REAL DEFAULT 0,
+            fluency_score REAL DEFAULT 0,
+            expression_score REAL DEFAULT 0,
+            naturalness_score REAL DEFAULT 0,
+            emotion_score REAL DEFAULT 0,
+            evaluation_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+
         CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
         CREATE INDEX IF NOT EXISTS idx_scores_session ON pronunciation_scores(session_id);
         CREATE INDEX IF NOT EXISTS idx_corrections_session ON grammar_corrections(session_id);
@@ -268,6 +283,18 @@ def get_user_sessions(user_id: int, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def delete_session(session_id: int) -> bool:
+    """Delete a session and all related data (messages, scores, corrections).
+    Returns True if deleted, False if session not found."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+
 # ============================================================
 # Message Operations
 # ============================================================
@@ -401,6 +428,60 @@ def get_error_type_stats(session_id: int) -> dict:
     rows = cursor.fetchall()
     conn.close()
     return {row["error_type"]: row["cnt"] for row in rows}
+
+
+# ============================================================
+# Session Evaluation Operations
+# ============================================================
+
+def save_session_evaluation(
+    session_id: int,
+    overall_score: float,
+    grammar_score: float = 0,
+    vocabulary_score: float = 0,
+    fluency_score: float = 0,
+    expression_score: float = 0,
+    naturalness_score: float = 0,
+    emotion_score: float = 0,
+    evaluation_json: Optional[dict] = None,
+) -> int:
+    """Insert or replace a session evaluation. Returns evaluation ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT OR REPLACE INTO session_evaluations
+           (session_id, overall_score, grammar_score, vocabulary_score,
+            fluency_score, expression_score, naturalness_score, emotion_score, evaluation_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            session_id,
+            overall_score,
+            grammar_score,
+            vocabulary_score,
+            fluency_score,
+            expression_score,
+            naturalness_score,
+            emotion_score,
+            json.dumps(evaluation_json) if evaluation_json else None,
+        ),
+    )
+    conn.commit()
+    eval_id = cursor.lastrowid
+    conn.close()
+    return eval_id
+
+
+def get_session_evaluation(session_id: int) -> Optional[dict]:
+    """Get evaluation for a session."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM session_evaluations WHERE session_id = ?",
+        (session_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # Initialize database on module import

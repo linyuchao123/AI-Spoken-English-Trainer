@@ -24,13 +24,22 @@ async def assess_pronunciation(req: PronunciationAssessRequest):
         fluency_score=round(result.fluency_score, 1),
         completeness_score=round(result.completeness_score, 1),
         overall_score=round(result.overall_score, 1),
+        stress_score=round(result.stress_score, 1),
+        intonation_score=round(result.intonation_score, 1),
+        rhythm_score=round(result.rhythm_score, 1),
         words=[
             WordScoreResponse(
                 word=w.word,
                 accuracy_score=round(w.accuracy_score, 1),
                 error_type=w.error_type,
+                expected_pronunciation=w.expected_pronunciation,
+                correction_cn=w.correction_cn,
             )
             for w in result.words
         ],
+        phoneme_highlights=result.phoneme_highlights,
+        summary_en=result.summary_en,
+        summary_cn=result.summary_cn,
+        suggestions=result.suggestions,
         error=result.error or "",
     )

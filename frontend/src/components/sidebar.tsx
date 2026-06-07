@@ -11,7 +11,9 @@ import {
   Sparkles,
   StopCircle,
   BarChart3,
-  Zap,
+  Play,
+  ClipboardList,
+  ChevronRight,
 } from "lucide-react";
 
 const DIFFICULTY_ICONS: Record<string, string> = {
@@ -46,61 +48,80 @@ export default function Sidebar() {
   const router = useRouter();
   const currentSceneData = scenes.find((s) => s.key === currentScene);
 
+  const handleCreateSession = async () => {
+    const session = await createSession();
+    if (session) {
+      router.push("/practice");
+    }
+  };
+
   const handleEndSession = async () => {
     if (!activeSession) return;
     await endSession();
-    router.push(`/report?sessionId=${activeSession.id}`);
+    router.push("/history");
   };
 
   return (
     <aside
       className={`
-        h-full bg-gradient-to-b from-[#1A1D28] via-[#232738] to-[#2A2E3D]
+        h-full bg-gradient-to-b from-[#161821] via-[#1C1F2D] to-[#222638]
         flex flex-col overflow-hidden transition-all duration-300 ease-in-out shrink-0
+        border-r border-white/5
         ${sidebarOpen ? "w-72" : "w-0"}
       `}
     >
-      <div className="flex-1 overflow-y-auto px-4 py-5 min-w-[288px]">
+      <div className="flex-1 overflow-y-auto px-5 py-6 min-w-[288px] space-y-6">
         {/* Header */}
-        <div className="text-center mb-5">
-          <Settings2 className="w-7 h-7 text-white/50 mx-auto mb-1" />
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-br from-[#5B4FCF]/20 to-[#9B8FFF]/10 border border-[#5B4FCF]/20 mb-2">
+            <Settings2 className="w-5 h-5 text-[#9B8FFF]" />
+          </div>
+          <p className="text-[11px] text-white/35 uppercase tracking-[0.2em] font-bold">
             练习控制台
           </p>
         </div>
 
-        <div className="h-px bg-white/8 mb-5" />
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
         {/* Scene Selection */}
-        <SectionTitle icon={<Target className="w-3.5 h-3.5" />} text="练习场景" />
-        <select
-          value={currentScene}
-          onChange={(e) => setCurrentScene(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm
-                     focus:outline-none focus:border-[#C8956C]/50 transition-colors cursor-pointer
-                     appearance-none"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='rgba(255,255,255,0.5)' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E")`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "right 12px center",
-          }}
-        >
-          {scenes.map((scene) => (
-            <option key={scene.key} value={scene.key} className="bg-[#232738] text-white">
-              {scene.icon}  {scene.name}
-            </option>
-          ))}
-        </select>
-        {currentSceneData && (
-          <p className="text-[11px] text-white/40 mt-1.5 px-1">
-            💬 {currentSceneData.description}
-          </p>
-        )}
+        <div className="space-y-2.5">
+          <SectionTitle icon={<Target className="w-3.5 h-3.5" />} text="练习场景" />
+          <div className="space-y-2">
+            {scenes.map((scene) => {
+              const isActive = currentScene === scene.key;
+              return (
+                <button
+                  key={scene.key}
+                  onClick={() => setCurrentScene(scene.key)}
+                  className={`
+                    w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium
+                    transition-all duration-200 text-left
+                    ${
+                      isActive
+                        ? "bg-gradient-to-r from-[#5B4FCF]/20 to-[#7C6FF7]/10 border border-[#5B4FCF]/30 text-white shadow-lg shadow-indigo-500/10"
+                        : "text-white/55 border border-transparent hover:bg-white/5 hover:text-white/80"
+                    }
+                  `}
+                >
+                  <span className="text-lg">{scene.icon}</span>
+                  <span className="flex-1">{scene.name}</span>
+                  {isActive && <ChevronRight className="w-4 h-4 text-[#9B8FFF]" />}
+                </button>
+              );
+            })}
+          </div>
+          {currentSceneData && (
+            <p className="text-[11px] text-white/35 leading-relaxed px-1">
+              {currentSceneData.description}
+            </p>
+          )}
+        </div>
 
         {/* Difficulty Selection */}
-        <div className="mt-5">
+        <div className="space-y-2.5">
           <SectionTitle icon={<Layers className="w-3.5 h-3.5" />} text="难度档位" />
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/3">
             {difficulties.map((d) => {
               const isActive = currentDifficulty === d.key;
               return (
@@ -108,15 +129,16 @@ export default function Sidebar() {
                   key={d.key}
                   onClick={() => setCurrentDifficulty(d.key)}
                   className={`
-                    flex-1 py-2 rounded-full text-[11px] font-medium border transition-all duration-200
+                    py-2 rounded-lg text-[11px] font-semibold transition-all duration-200
                     ${
                       isActive
-                        ? "bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] text-white border-transparent shadow-md shadow-indigo-500/30"
-                        : "text-white/70 border-white/12 hover:border-[#C8956C]/40 hover:bg-[#C8956C]/10"
+                        ? "bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] text-white shadow-lg shadow-indigo-500/25 scale-[1.02]"
+                        : "text-white/50 hover:text-white/80 hover:bg-white/5"
                     }
                   `}
                 >
-                  {DIFFICULTY_ICONS[d.key] || "📊"} {d.name}
+                  <span className="block text-sm mb-0.5">{DIFFICULTY_ICONS[d.key] || "📊"}</span>
+                  {d.name}
                 </button>
               );
             })}
@@ -124,9 +146,9 @@ export default function Sidebar() {
         </div>
 
         {/* Model Selection */}
-        <div className="mt-5">
+        <div className="space-y-2.5">
           <SectionTitle icon={<Bot className="w-3.5 h-3.5" />} text="AI 模型" />
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/3">
             {models.map((m) => {
               const isActive = currentModel === m.key;
               return (
@@ -134,15 +156,16 @@ export default function Sidebar() {
                   key={m.key}
                   onClick={() => setCurrentModel(m.key)}
                   className={`
-                    flex-1 py-2 rounded-full text-[11px] font-medium border transition-all duration-200
+                    py-2.5 rounded-lg text-[11px] font-semibold transition-all duration-200
                     ${
                       isActive
-                        ? "bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] text-white border-transparent shadow-md shadow-indigo-500/30"
-                        : "text-white/70 border-white/12 hover:border-[#C8956C]/40 hover:bg-[#C8956C]/10"
+                        ? "bg-gradient-to-br from-[#C8956C]/30 to-[#E0B894]/20 text-white border border-[#C8956C]/40 shadow-lg shadow-amber-500/10"
+                        : "text-white/50 hover:text-white/80 hover:bg-white/5"
                     }
                   `}
                 >
-                  {m.icon} {m.name}
+                  <span className="block text-base mb-0.5">{m.icon}</span>
+                  {m.name}
                 </button>
               );
             })}
@@ -150,72 +173,88 @@ export default function Sidebar() {
           {(() => {
             const cur = models.find((m) => m.key === currentModel);
             return cur ? (
-              <p className="text-[11px] text-white/40 mt-1.5 px-1 italic">
+              <p className="text-[11px] text-white/35 italic px-1">
                 {cur.description}
               </p>
             ) : null;
           })()}
         </div>
 
-        <div className="h-px bg-white/8 my-5" />
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
         {/* Session Controls */}
-        <SectionTitle icon={<Sparkles className="w-3.5 h-3.5" />} text="会话管理" />
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={createSession}
-            className="flex-1 py-2.5 rounded-full text-xs font-bold text-white
-                       bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7]
-                       shadow-md shadow-indigo-500/30
-                       hover:shadow-lg hover:shadow-indigo-500/40 hover:-translate-y-0.5
-                       transition-all duration-200"
-          >
-            ✨ 新建会话
-          </button>
-          <button
-            onClick={handleEndSession}
-            disabled={!activeSession}
-            className="flex-1 py-2.5 rounded-full text-xs font-semibold
-                       text-white/70 bg-white/6 border border-white/10
-                       hover:bg-white/12 hover:border-white/25
-                       disabled:opacity-40 disabled:cursor-not-allowed
-                       transition-all duration-200"
-          >
-            <StopCircle className="w-3.5 h-3.5 inline mr-1" />
-            结束会话
-          </button>
+        <div className="space-y-2.5">
+          <SectionTitle icon={<Sparkles className="w-3.5 h-3.5" />} text="会话管理" />
+          <div className="space-y-2">
+            <button
+              onClick={handleCreateSession}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white
+                         bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7]
+                         shadow-lg shadow-indigo-500/25
+                         hover:shadow-xl hover:shadow-indigo-500/35 hover:-translate-y-0.5
+                         active:scale-[0.98]
+                         transition-all duration-200"
+            >
+              <Play className="w-4 h-4" />
+              新建会话
+            </button>
+            <button
+              onClick={handleEndSession}
+              disabled={!activeSession}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                         text-white/55 bg-white/5 border border-white/8
+                         hover:bg-white/10 hover:border-white/20 hover:text-white/80
+                         disabled:opacity-30 disabled:cursor-not-allowed
+                         transition-all duration-200"
+            >
+              <StopCircle className="w-4 h-4" />
+              结束会话
+            </button>
+          </div>
         </div>
 
         {/* Session Status */}
         {activeSession ? (
-          <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <p className="text-emerald-400 text-xs font-semibold">🟢 会话进行中</p>
-            <p className="text-white/50 text-[11px] mt-1">
-              {activeSession.scene_name} · {activeSession.difficulty} · {activeSession.total_rounds} 轮
+          <div className="p-3.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </span>
+              <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider">进行中</p>
+            </div>
+            <p className="text-white/40 text-[11px] leading-relaxed">
+              {activeSession.scene_name} · {activeSession.difficulty} · {activeSession.total_rounds} 轮对话
             </p>
           </div>
         ) : (
-          <div className="mt-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-            <p className="text-blue-400 text-xs">
+          <div className="p-3.5 rounded-xl bg-[#5B4FCF]/5 border border-[#5B4FCF]/10">
+            <p className="text-[#9B8FFF] text-xs">
               💡 点击「新建会话」开始练习
             </p>
           </div>
         )}
 
-        <div className="h-px bg-white/8 my-5" />
-
         {/* Report Button */}
-        <SectionTitle icon={<BarChart3 className="w-3.5 h-3.5" />} text="学习报告" />
-        <button
-          onClick={() => activeSession && router.push(`/report?sessionId=${activeSession.id}`)}
-          disabled={!activeSession}
-          className="w-full mt-2 py-2.5 rounded-full text-xs font-semibold
-                     text-white/70 bg-white/6 border border-white/10
-                     hover:bg-white/12 disabled:opacity-40 disabled:cursor-not-allowed
-                     transition-all duration-200"
-        >
-          📋 查看课后报告
-        </button>
+        <div className="space-y-2.5">
+          <SectionTitle icon={<BarChart3 className="w-3.5 h-3.5" />} text="学习报告" />
+          <button
+            onClick={() => activeSession && router.push(`/report?sessionId=${activeSession.id}`)}
+            disabled={!activeSession}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                       text-white/55 bg-white/5 border border-white/8
+                       hover:bg-white/10 hover:border-white/20 hover:text-white/80
+                       disabled:opacity-30 disabled:cursor-not-allowed
+                       transition-all duration-200"
+          >
+            <ClipboardList className="w-4 h-4" />
+            查看课后报告
+          </button>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
       </div>
     </aside>
   );
@@ -223,9 +262,9 @@ export default function Sidebar() {
 
 function SectionTitle({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex items-center gap-1.5 mb-2">
-      <span className="text-white/40">{icon}</span>
-      <h5 className="text-[11px] font-semibold text-white/40 uppercase tracking-wider">
+    <div className="flex items-center gap-2">
+      <span className="text-white/30">{icon}</span>
+      <h5 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.15em]">
         {text}
       </h5>
     </div>

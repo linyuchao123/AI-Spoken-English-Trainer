@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI English Speaking Trainer",
-  description: "Practice English speaking with AI in immersive scenarios",
+  title: "AI Spoken English Trainer — 智能英语口语陪练",
+  description: "与 AI 进行沉浸式英语对话练习，多场景模拟、实时发音评估、精准语法纠正",
 };
 
 export default function RootLayout({
