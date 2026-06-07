@@ -1,55 +1,42 @@
-"""
-FastAPI backend entry point for AI Spoken English Trainer.
-Run with: uvicorn backend.main:app --reload --port 8000
-"""
-
-import sys
-import os
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+"""FastAPI backend entry point."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from utils.db import init_db
 
+from config.settings import CORS_ORIGINS
+from utils.db import init_db
 from backend.api.auth import router as auth_router
 from backend.api.scenes import router as scenes_router
 from backend.api.sessions import router as sessions_router
 from backend.api.grammar import router as grammar_router
 from backend.api.tts import router as tts_router
 from backend.api.pronunciation import router as pronunciation_router
+from backend.api.report import router as report_router
 
-# Initialize database
-init_db()
+app = FastAPI(title="AI Spoken English Trainer", version="1.0.0")
 
-app = FastAPI(
-    title="AI Spoken English Trainer API",
-    version="2.0.0",
-    description="Backend API for the AI English speaking practice platform.",
-)
-
-# CORS - allow frontend dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routers
 app.include_router(auth_router)
 app.include_router(scenes_router)
 app.include_router(sessions_router)
 app.include_router(grammar_router)
 app.include_router(tts_router)
 app.include_router(pronunciation_router)
+app.include_router(report_router)
+
+
+@app.on_event("startup")
+async def startup():
+    init_db()
 
 
 @app.get("/api/health")
-async def health_check():
-    return {"status": "ok", "service": "AI Spoken English Trainer"}
+async def health():
+    return {"status": "ok"}
