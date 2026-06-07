@@ -151,3 +151,22 @@ class TTSResponse(BaseModel):
     format: str = "mp3"
     voice: str
     provider: str
+
+
+# ============================================================
+# Pronunciation Assessment Schemas
+# ============================================================
+
+class WordScoreResponse(BaseModel):
+    word: str
+    accuracy_score: float
+    error_type: str  # "None", "Omission", "Insertion", "Mispronunciation"
+
+
+class PronunciationResponse(BaseModel):
+    accuracy_score: float = 0
+    fluency_score: float = 0
+    completeness_score: float = 0
+    overall_score: float = 0
+    words: list[WordScoreResponse] = []
+    error: str = ""
