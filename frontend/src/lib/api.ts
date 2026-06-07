@@ -186,14 +186,11 @@ export interface PronunciationResult {
 }
 
 export const pronunciationApi = {
-  assess: (audio: Blob, reference_text: string) => {
-    const form = new FormData();
-    form.append("audio", audio, "recording.wav");
-    form.append("reference_text", reference_text);
-    return api.post<PronunciationResult>("/api/pronunciation/assess-safe", form, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-  },
+  assess: (recognized_text: string, reference_text: string) =>
+    api.post<PronunciationResult>("/api/pronunciation/assess", {
+      recognized_text,
+      reference_text,
+    }),
 };
 
 // ============================================================
