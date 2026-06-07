@@ -1,50 +1,81 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle } from "lucide-react";
+import { Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle, RefreshCw } from "lucide-react";
 import { pronunciationApi, PronunciationResult, WordScore } from "@/lib/api";
 
-/* ---------- Audio Recorder Hook ---------- */
-function useAudioRecorder() {
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+/* ---------- Web Speech Recognition Hook ---------- */
+function useSpeechRecognition() {
+  const [isListening, setIsListening] = useState(false);
+  const [recognizedText, setRecognizedText] = useState("");
+  const [interimText, setInterimText] = useState("");
+  const recognitionRef = useRef<any>(null);
 
-  const start = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus" : "audio/webm";
-      chunksRef.current = [];
-      const recorder = new MediaRecorder(stream, { mimeType });
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        setAudioBlob(blob);
-        stream.getTracks().forEach((t) => t.stop());
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Microphone access denied:", err);
+  const start = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器。");
+      return;
     }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interim += transcript;
+        }
+      }
+      setRecognizedText(finalTranscript.trim());
+      setInterimText(interim);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error !== "no-speech") {
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimText("");
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+    setRecognizedText("");
+    setInterimText("");
   }, []);
 
   const stop = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
-      setIsRecording(false);
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      recognition.stop();
+      setIsListening(false);
+      setInterimText("");
     }
   }, []);
 
   const reset = useCallback(() => {
-    setAudioBlob(null);
-  }, []);
+    stop();
+    setRecognizedText("");
+    setInterimText("");
+  }, [stop]);
 
-  return { isRecording, audioBlob, start, stop, reset };
+  return { isListening, recognizedText, interimText, start, stop, reset };
 }
 
 /* ---------- Score Gauge ---------- */
@@ -110,14 +141,14 @@ export default function PronunciationPage() {
   const [assessing, setAssessing] = useState(false);
   const [result, setResult] = useState<PronunciationResult | null>(null);
   const [error, setError] = useState("");
-  const recorder = useAudioRecorder();
+  const speech = useSpeechRecognition();
 
   const handleAssess = async () => {
-    if (!recorder.audioBlob || !referenceText.trim()) return;
+    if (!speech.recognizedText || !referenceText.trim()) return;
     setAssessing(true);
     setError("");
     try {
-      const { data } = await pronunciationApi.assess(recorder.audioBlob, referenceText.trim());
+      const { data } = await pronunciationApi.assess(speech.recognizedText, referenceText.trim());
       setResult(data);
       if (data.error) setError(data.error);
     } catch (err: any) {
@@ -128,7 +159,7 @@ export default function PronunciationPage() {
   };
 
   const resetAll = () => {
-    recorder.reset();
+    speech.reset();
     setResult(null);
     setError("");
   };
@@ -148,8 +179,7 @@ export default function PronunciationPage() {
         </div>
         <h1 className="text-2xl font-extrabold text-text-primary mb-2">🎯 发音评测</h1>
         <p className="text-text-secondary text-sm max-w-md mx-auto leading-relaxed">
-          输入标准文本，录音朗读，AI 评估发音准确度、流利度、完整度。
-          {!result && "（需配置 AZURE_SPEECH_KEY）"}
+          输入标准文本，点击麦克风朗读，AI 对比分析你的发音准确度、流利度、完整度。
         </p>
       </div>
 
@@ -168,22 +198,21 @@ export default function PronunciationPage() {
                      focus:ring-2 focus:ring-primary/10 transition-all"
         />
 
-        {/* Record Controls */}
+        {/* Speech Recognition Controls */}
         <div className="flex items-center justify-center gap-4 mt-5">
-          {!recorder.audioBlob ? (
-            <button onClick={recorder.isRecording ? recorder.stop : recorder.start}
-              className={`flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
-                transition-all duration-300 ${
-                  recorder.isRecording
-                    ? "bg-red-500 animate-pulse shadow-red-200 scale-105"
-                    : "bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-200 hover:scale-105 active:scale-95"
-                }`}
+          {!speech.recognizedText && !speech.isListening ? (
+            <button onClick={speech.start}
+              className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
+                         bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-200 hover:scale-105 active:scale-95 transition-all"
             >
-              {recorder.isRecording ? (
-                <><MicOff className="w-4 h-4" /> 停止录音</>
-              ) : (
-                <><Mic className="w-4 h-4" /> 开始录音</>
-              )}
+              <Mic className="w-4 h-4" /> 开始朗读
+            </button>
+          ) : speech.isListening ? (
+            <button onClick={speech.stop}
+              className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
+                         bg-red-500 animate-pulse shadow-red-200 scale-105 transition-all"
+            >
+              <MicOff className="w-4 h-4" /> 停止录音
             </button>
           ) : (
             <div className="flex items-center gap-3">
@@ -192,26 +221,39 @@ export default function PronunciationPage() {
                            bg-gradient-to-r from-emerald-500 to-teal-600 shadow-md shadow-emerald-200
                            hover:scale-105 active:scale-95 disabled:opacity-50 transition-all">
                 {assessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-                {assessing ? "评估中..." : "开始评估"}
+                {assessing ? "AI 分析中..." : "开始评估"}
               </button>
               <button onClick={resetAll}
                 className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold
                            text-text-secondary bg-white border border-border hover:bg-bg-main transition-colors">
-                重新录音
+                <RefreshCw className="w-3.5 h-3.5" /> 重新朗读
               </button>
             </div>
           )}
         </div>
 
-        {recorder.isRecording && (
-          <p className="text-center text-xs text-red-500 mt-3 animate-pulse">
-            🎤 正在录音... 请朗读上方参考文本
-          </p>
+        {speech.isListening && (
+          <div className="mt-3 space-y-1">
+            <p className="text-center text-xs text-red-500 animate-pulse">
+              🎤 正在听... 请朗读上方参考文本
+            </p>
+            {speech.interimText && (
+              <p className="text-center text-xs text-gray-400 italic">
+                {speech.interimText}
+              </p>
+            )}
+          </div>
         )}
-        {recorder.audioBlob && !assessing && !result && (
-          <p className="text-center text-xs text-emerald-600 mt-3">
-            ✅ 录音完成！点击「开始评估」
-          </p>
+        {speech.recognizedText && !speech.isListening && !assessing && !result && (
+          <div className="mt-3 space-y-2">
+            <p className="text-center text-xs text-emerald-600">
+              ✅ 识别完成！点击「开始评估」
+            </p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+              <p className="text-xs font-semibold text-emerald-700 mb-1">🎙️ 识别结果：</p>
+              <p className="text-sm text-emerald-800">{speech.recognizedText}</p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -222,7 +264,6 @@ export default function PronunciationPage() {
           <div>
             <p className="text-amber-800 text-sm font-semibold">评估提示</p>
             <p className="text-amber-600 text-xs mt-0.5">{error}</p>
-            <p className="text-amber-500 text-[10px] mt-1">配置 AZURE_SPEECH_KEY 后可使用完整发音评估功能。</p>
           </div>
         </div>
       )}
