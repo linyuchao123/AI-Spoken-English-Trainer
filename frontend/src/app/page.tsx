@@ -15,7 +15,7 @@ export default function RootPage() {
 
   useEffect(() => {
     if (!isLoading) {
-      router.replace(isAuthenticated ? "/practice" : "/login");
+      router.replace(isAuthenticated ? "/home" : "/login");
     }
   }, [isLoading, isAuthenticated, router]);
 
