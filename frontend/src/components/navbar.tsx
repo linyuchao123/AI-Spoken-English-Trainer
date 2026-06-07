@@ -14,6 +14,8 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeft,
+  Volume2,
+  AudioLines,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -21,6 +23,8 @@ const NAV_ITEMS = [
   { href: "/history", label: "历史会话", icon: History },
   { href: "/pronunciation", label: "发音评测", icon: Target },
   { href: "/grammar", label: "语法纠错", icon: Wrench },
+  { href: "/asr", label: "语音识别", icon: AudioLines },
+  { href: "/tts", label: "语音合成", icon: Volume2 },
   { href: "/report", label: "课后总结", icon: BarChart3 },
 ];
 
