@@ -135,6 +135,21 @@ export interface SessionDetail {
   created_at: string;
   ended_at: string;
   messages: DetailMessage[];
+  evaluation: Evaluation | null;
+}
+
+export interface Evaluation {
+  overall_score: number;
+  grammar_score: number;
+  vocabulary_score: number;
+  fluency_score: number;
+  expression_score: number;
+  naturalness_score: number;
+  emotion_score: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
 }
 
 export const sessionsApi = {

@@ -246,3 +246,22 @@ class SessionDetailResponse(BaseModel):
     created_at: str = ""
     ended_at: str = ""
     messages: list[DetailMessage] = []
+    evaluation: Optional["EvaluationResponse"] = None
+
+
+# ============================================================
+# Evaluation Schemas
+# ============================================================
+
+class EvaluationResponse(BaseModel):
+    overall_score: float = 0
+    grammar_score: float = 0
+    vocabulary_score: float = 0
+    fluency_score: float = 0
+    expression_score: float = 0
+    naturalness_score: float = 0
+    emotion_score: float = 0
+    summary: str = ""
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    suggestions: list[str] = []

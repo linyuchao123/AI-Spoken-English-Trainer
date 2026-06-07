@@ -19,6 +19,7 @@ from backend.models.schemas import (
     DetailPronunciation,
     DetailGrammar,
     WordScoreResponse,
+    EvaluationResponse,
 )
 from utils.db import (
     create_session,
@@ -29,11 +30,14 @@ from utils.db import (
     get_session_messages,
     get_session_scores,
     get_session_corrections,
+    get_session_evaluation,
     add_message,
     delete_session,
+    save_session_evaluation,
 )
 from config.settings import SCENES
 from modules.llm import generate_reply, generate_opening
+from modules.evaluation import evaluate_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -121,7 +125,7 @@ async def get_active(request: Request):
 
 @router.patch("/{session_id}/end", response_model=SessionResponse)
 async def end_current_session(session_id: int, request: Request):
-    """End a practice session."""
+    """End a practice session and run LLM multi-dimension evaluation."""
     require_auth(request)
 
     session = get_session(session_id)
@@ -131,6 +135,46 @@ async def end_current_session(session_id: int, request: Request):
         raise HTTPException(status_code=400, detail="Session is not active.")
 
     end_session(session_id)
+
+    # ── Run LLM multi-dimension evaluation ──
+    try:
+        messages = get_session_messages(session_id)
+        eval_result = evaluate_session(
+            messages=[dict(m) for m in messages],
+            scene_name=session["scene_name"],
+            difficulty=session["difficulty"],
+            total_rounds=session.get("total_rounds", 0),
+        )
+        save_session_evaluation(
+            session_id=session_id,
+            overall_score=eval_result.overall_score,
+            grammar_score=eval_result.grammar_score,
+            vocabulary_score=eval_result.vocabulary_score,
+            fluency_score=eval_result.fluency_score,
+            expression_score=eval_result.expression_score,
+            naturalness_score=eval_result.naturalness_score,
+            emotion_score=eval_result.emotion_score,
+            evaluation_json={
+                "summary": eval_result.summary,
+                "strengths": eval_result.strengths,
+                "weaknesses": eval_result.weaknesses,
+                "suggestions": eval_result.suggestions,
+            },
+        )
+        # Update session avg_pronunciation_score with evaluation overall
+        import sqlite3
+        conn = __import__("utils.db", fromlist=["get_connection"]).get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE sessions SET avg_pronunciation_score = ? WHERE id = ?",
+            (eval_result.overall_score, session_id),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        logger = __import__("logging").getLogger(__name__)
+        logger.warning("Session evaluation skipped: %s", exc)
+
     session = get_session(session_id)
     return _session_to_response(session)
 
@@ -369,4 +413,32 @@ async def get_session_detail(session_id: int, request: Request):
         created_at=str(session.get("created_at", "")),
         ended_at=str(session.get("ended_at", "")),
         messages=detail_msgs,
+        evaluation=_build_evaluation(session_id),
+    )
+
+
+def _build_evaluation(session_id: int) -> Optional[EvaluationResponse]:
+    """Build evaluation response from DB record."""
+    row = get_session_evaluation(session_id)
+    if not row:
+        return None
+    extra = None
+    raw = row.get("evaluation_json")
+    if raw:
+        try:
+            extra = _json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            pass
+    return EvaluationResponse(
+        overall_score=round(row.get("overall_score", 0), 1),
+        grammar_score=round(row.get("grammar_score", 0), 1),
+        vocabulary_score=round(row.get("vocabulary_score", 0), 1),
+        fluency_score=round(row.get("fluency_score", 0), 1),
+        expression_score=round(row.get("expression_score", 0), 1),
+        naturalness_score=round(row.get("naturalness_score", 0), 1),
+        emotion_score=round(row.get("emotion_score", 0), 1),
+        summary=extra.get("summary", "") if extra else "",
+        strengths=extra.get("strengths", []) if extra else [],
+        weaknesses=extra.get("weaknesses", []) if extra else [],
+        suggestions=extra.get("suggestions", []) if extra else [],
     )
