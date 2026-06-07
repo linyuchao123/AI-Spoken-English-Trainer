@@ -288,10 +288,10 @@ export default function GrammarPage() {
                           <span className="text-[10px] text-white/15">{formatTime(item.timestamp)}</span>
                         </div>
                       </div>
-                      <button onClick={(e) => handleDeleteHistory(e, item.id)}
-                        className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-danger/60 transition-all p-0.5" title="删除">
+                      <span onClick={(e) => handleDeleteHistory(e, item.id)}
+                        className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-danger/60 transition-all p-0.5 cursor-pointer" title="删除" role="button">
                         <Trash2 className="w-3 h-3" />
-                      </button>
+                      </span>
                     </div>
                   </button>
                 );
