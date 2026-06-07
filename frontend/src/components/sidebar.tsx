@@ -48,10 +48,17 @@ export default function Sidebar() {
   const router = useRouter();
   const currentSceneData = scenes.find((s) => s.key === currentScene);
 
+  const handleCreateSession = async () => {
+    const session = await createSession();
+    if (session) {
+      router.push("/practice");
+    }
+  };
+
   const handleEndSession = async () => {
     if (!activeSession) return;
     await endSession();
-    router.push(`/report?sessionId=${activeSession.id}`);
+    router.push("/history");
   };
 
   return (
@@ -181,7 +188,7 @@ export default function Sidebar() {
           <SectionTitle icon={<Sparkles className="w-3.5 h-3.5" />} text="会话管理" />
           <div className="space-y-2">
             <button
-              onClick={createSession}
+              onClick={handleCreateSession}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white
                          bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7]
                          shadow-lg shadow-indigo-500/25
