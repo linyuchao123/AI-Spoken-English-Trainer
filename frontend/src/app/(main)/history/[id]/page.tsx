@@ -129,7 +129,7 @@ function MessageBubble({ message }: { message: DetailMessage }) {
         </div>
       )}
 
-      <div className={`max-w-[70%] ${isUser ? "order-1" : ""}`}>
+      <div className={`max-w-[70%]`}>
         {/* English content */}
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
           isUser
