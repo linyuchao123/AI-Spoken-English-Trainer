@@ -202,3 +202,47 @@ class ReportResponse(BaseModel):
     suggestions: list[str] = []
     topics_covered: list[str] = []
     level_assessment: str = ""
+
+
+# ============================================================
+# Session Detail Schemas (for history review)
+# ============================================================
+
+class DetailPronunciation(BaseModel):
+    overall_score: float = 0
+    accuracy_score: float = 0
+    fluency_score: float = 0
+    completeness_score: float = 0
+    words: list[WordScoreResponse] = []
+
+
+class DetailGrammar(BaseModel):
+    original_text: str
+    corrected_text: str
+    error_type: str = ""
+    explanation: str = ""
+    explanation_cn: str = ""
+    better_expression: str = ""  # improved expression suggestion
+
+
+class DetailMessage(BaseModel):
+    id: int
+    role: str
+    content: str
+    translation_cn: str = ""
+    pronunciation: Optional[DetailPronunciation] = None
+    grammar: Optional[DetailGrammar] = None
+
+
+class SessionDetailResponse(BaseModel):
+    session_id: int
+    scene_name: str
+    scene_key: str
+    difficulty: str
+    model: str
+    status: str
+    total_rounds: int
+    avg_pronunciation_score: float
+    created_at: str = ""
+    ended_at: str = ""
+    messages: list[DetailMessage] = []

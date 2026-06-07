@@ -96,6 +96,47 @@ export interface Message {
   created_at: string | null;
 }
 
+// Session detail (for history review)
+export interface DetailPronunciation {
+  overall_score: number;
+  accuracy_score: number;
+  fluency_score: number;
+  completeness_score: number;
+  words: WordScore[];
+}
+
+export interface DetailGrammar {
+  original_text: string;
+  corrected_text: string;
+  error_type: string;
+  explanation: string;
+  explanation_cn: string;
+  better_expression: string;
+}
+
+export interface DetailMessage {
+  id: number;
+  role: string;
+  content: string;
+  translation_cn: string;
+  pronunciation: DetailPronunciation | null;
+  grammar: DetailGrammar | null;
+}
+
+export interface SessionDetail {
+  session_id: number;
+  scene_name: string;
+  scene_key: string;
+  difficulty: string;
+  model: string;
+  status: string;
+  total_rounds: number;
+  avg_pronunciation_score: number;
+  created_at: string;
+  ended_at: string;
+  messages: DetailMessage[];
+}
+
 export const sessionsApi = {
   create: (scene_key: string, difficulty: string, model: string) =>
     api.post<Session>("/api/sessions", { scene_key, difficulty, model }),
@@ -112,6 +153,9 @@ export const sessionsApi = {
 
   sendMessage: (sessionId: number, content: string) =>
     api.post<Message[]>(`/api/sessions/${sessionId}/messages`, { content }),
+
+  getDetail: (sessionId: number) =>
+    api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),
 };
 
 // ============================================================

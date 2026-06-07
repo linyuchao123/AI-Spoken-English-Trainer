@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { sessionsApi, Session } from "@/lib/api";
-import { Clock, BarChart3, Zap } from "lucide-react";
+import { Clock, BarChart3, Zap, ChevronRight } from "lucide-react";
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,7 +25,7 @@ export default function HistoryPage() {
           历史会话
         </h1>
         <p className="text-text-secondary text-sm mt-1">
-          查看你的英语口语练习记录
+          查看你的英语口语练习记录，点击进入详情
         </p>
       </div>
 
@@ -37,7 +39,7 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (
-            <SessionCard key={session.id} session={session} />
+            <SessionCard key={session.id} session={session} onClick={() => router.push(`/history/${session.id}`)} />
           ))}
         </div>
       )}
@@ -45,13 +47,16 @@ export default function HistoryPage() {
   );
 }
 
-function SessionCard({ session }: { session: Session }) {
+function SessionCard({ session, onClick }: { session: Session; onClick: () => void }) {
   const statusColor = session.status === "active" ? "text-emerald-500" : "text-text-light";
   const statusText = session.status === "active" ? "进行中" : "已结束";
   const date = session.created_at ? new Date(session.created_at).toLocaleDateString("zh-CN") : "";
 
   return (
-    <div className="bg-white rounded-xl border border-border p-4 hover:shadow-md hover:border-[#5B4FCF]/20 transition-all cursor-pointer group">
+    <div
+      onClick={onClick}
+      className="bg-white rounded-xl border border-border p-4 hover:shadow-lg hover:border-[#5B4FCF]/20 transition-all cursor-pointer group"
+    >
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -66,11 +71,14 @@ function SessionCard({ session }: { session: Session }) {
             <span className={statusColor}>{statusText}</span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xl font-extrabold text-[#5B4FCF]">
-            {session.avg_pronunciation_score.toFixed(0)}
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xl font-extrabold text-[#5B4FCF]">
+              {session.avg_pronunciation_score.toFixed(0)}
+            </div>
+            <div className="text-[10px] text-text-light">/ 100</div>
           </div>
-          <div className="text-[10px] text-text-light">/ 100</div>
+          <ChevronRight className="w-4 h-4 text-text-light/30 group-hover:text-[#5B4FCF] group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
     </div>
