@@ -39,7 +39,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, username, password);
-      router.push("/practice");
+      router.push("/home");
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
