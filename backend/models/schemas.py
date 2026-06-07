@@ -170,3 +170,35 @@ class PronunciationResponse(BaseModel):
     overall_score: float = 0
     words: list[WordScoreResponse] = []
     error: str = ""
+
+
+# ============================================================
+# Report Schemas
+# ============================================================
+
+class ScorePoint(BaseModel):
+    round: int
+    score: float
+
+
+class ReportResponse(BaseModel):
+    session_id: int
+    scene_name: str
+    difficulty: str
+    model: str
+    total_rounds: int
+    avg_pronunciation_score: float
+    created_at: str = ""
+    ended_at: str = ""
+    message_count: int = 0
+    score_count: int = 0
+    correction_count: int = 0
+    error_stats: dict[str, int] = {}
+    score_history: list[ScorePoint] = []
+    # LLM analysis
+    summary: str = ""
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    suggestions: list[str] = []
+    topics_covered: list[str] = []
+    level_assessment: str = ""

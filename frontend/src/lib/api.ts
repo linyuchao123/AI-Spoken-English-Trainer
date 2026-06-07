@@ -196,4 +196,40 @@ export const pronunciationApi = {
   },
 };
 
+// ============================================================
+// Report API
+// ============================================================
+
+export interface ScorePoint {
+  round: number;
+  score: number;
+}
+
+export interface ReportData {
+  session_id: number;
+  scene_name: string;
+  difficulty: string;
+  model: string;
+  total_rounds: number;
+  avg_pronunciation_score: number;
+  created_at: string;
+  ended_at: string;
+  message_count: number;
+  score_count: number;
+  correction_count: number;
+  error_stats: Record<string, number>;
+  score_history: ScorePoint[];
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  topics_covered: string[];
+  level_assessment: string;
+}
+
+export const reportApi = {
+  get: (sessionId: number) => api.get<ReportData>(`/api/report/${sessionId}`),
+  getLatest: () => api.get<ReportData>("/api/report/active/latest"),
+};
+
 export default api;
