@@ -214,7 +214,7 @@ SCENE_PROMPTS = {
 # Grammar Correction Prompt
 # ============================================================
 
-GRAMMAR_CORRECTION_PROMPT = """You are an expert English teacher. Analyze the following sentence spoken by an English learner and provide corrections.
+GRAMMAR_CORRECTION_PROMPT = """You are an expert English teacher. Analyze the following sentence spoken by an English learner and provide corrections WITH better expression suggestions.
 
 User's sentence: "{user_text}"
 
@@ -222,19 +222,32 @@ Respond in the following JSON format ONLY (no other text):
 {{
     "has_errors": true/false,
     "original": "the original sentence",
-    "corrected": "the corrected sentence",
+    "corrected": "the corrected sentence with all grammar/vocabulary errors fixed",
+    "expression_improvements": [
+        {{
+            "original_phrase": "the original phrasing",
+            "improved_phrase": "a more natural/polished alternative",
+            "explanation": "why this sounds more natural (English)",
+            "explanation_cn": "为什么这样更地道（中文解释）"
+        }}
+    ],
     "errors": [
         {{
-            "type": "grammar/vocabulary/word_order/preposition/article/tense",
+            "type": "grammar/vocabulary/word_order/preposition/article/tense/spelling/punctuation",
             "original_text": "the error part",
             "corrected_text": "the correction",
             "explanation": "brief English explanation of the error and correction",
-            "explanation_cn": "对应中文解释（简明扼要，帮助中文母语者理解错误原因）"
+            "explanation_cn": "对应中文解释（简明扼要，帮助中文母语者理解错误原因）",
+            "better_expression": "an even better / more idiomatic way to phrase this (if applicable, else empty string)"
         }}
     ]
 }}
 
-IMPORTANT: Provide BOTH explanation (English) AND explanation_cn (Chinese) for EVERY error."""
+Rules:
+- expression_improvements: suggest 1-3 places where the phrasing could be more natural/idiomatic even if grammatically correct. If the sentence is already natural, return empty array [].
+- For each error: if there's an even better way to express that corrected phrase, put it in better_expression (otherwise empty string "").
+- Provide BOTH explanation (English) AND explanation_cn (Chinese) for EVERY error and EVERY expression_improvement.
+- Consider the student's Chinese-native perspective when writing Chinese explanations."""
 
 # Increased max_tokens multiplier for bilingual output
 GRAMMAR_MAX_TOKENS_MULTIPLIER = 5  # len(text) * multiplier

@@ -186,6 +186,14 @@ export interface GrammarErrorItem {
   corrected_text: string;
   explanation: string;
   explanation_cn: string;
+  better_expression: string;
+}
+
+export interface ExpressionImprovementItem {
+  original_phrase: string;
+  improved_phrase: string;
+  explanation: string;
+  explanation_cn: string;
 }
 
 export interface GrammarResult {
@@ -193,11 +201,22 @@ export interface GrammarResult {
   original: string;
   corrected: string;
   errors: GrammarErrorItem[];
+  expression_improvements: ExpressionImprovementItem[];
+}
+
+export interface ExtractTextResult {
+  text: string;
+  source: string;
 }
 
 export const grammarApi = {
   correct: (text: string, model: string) =>
     api.post<GrammarResult>("/api/grammar/correct", { text, model }),
+  extractText: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<ExtractTextResult>("/api/grammar/extract-text", form);
+  },
 };
 
 // ============================================================

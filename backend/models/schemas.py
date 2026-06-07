@@ -117,6 +117,14 @@ class GrammarError(BaseModel):
     corrected_text: str
     explanation: str
     explanation_cn: str = ""
+    better_expression: str = ""
+
+
+class ExpressionImprovement(BaseModel):
+    original_phrase: str
+    improved_phrase: str
+    explanation: str
+    explanation_cn: str = ""
 
 
 class GrammarResponse(BaseModel):
@@ -124,6 +132,7 @@ class GrammarResponse(BaseModel):
     original: str
     corrected: str
     errors: list[GrammarError]
+    expression_improvements: list[ExpressionImprovement] = []
 
 
 # ============================================================
