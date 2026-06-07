@@ -52,7 +52,7 @@ export default function Navbar() {
       </button>
 
       {/* Brand */}
-      <Link href="/home" className="flex items-center gap-2.5 mr-6 shrink-0 group">
+      <Link href="/home" className="flex items-center gap-2.5 ml-2 mr-6 shrink-0 group">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#5B4FCF] to-[#9B8FFF] flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:shadow-indigo-500/50 transition-shadow">
           <Mic className="w-4.5 h-4.5 text-white" />
         </div>
