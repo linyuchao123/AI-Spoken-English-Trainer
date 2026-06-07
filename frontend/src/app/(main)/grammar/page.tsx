@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Sparkles, AlertCircle, CheckCircle2, ArrowRight, Loader2,
   PanelLeftClose, PanelLeftOpen, Trash2, MessageSquareText,
@@ -95,7 +96,14 @@ function useSpeechRecognition() {
 /* ═══════════════════════ 主页面 ═══════════════════════ */
 
 export default function GrammarPage() {
+  const searchParams = useSearchParams();
   const [text, setText] = useState("");
+  
+  // Read ?text= from URL on mount
+  useEffect(() => {
+    const paramText = searchParams.get("text");
+    if (paramText && !text) setText(paramText);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState("gpt-4o");
   const [loading, setLoading] = useState(false);

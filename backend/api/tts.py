@@ -17,6 +17,7 @@ async def speak(req: TTSRequest):
             text=req.text,
             voice=req.voice,
             provider=req.provider,
+            rate=req.rate,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

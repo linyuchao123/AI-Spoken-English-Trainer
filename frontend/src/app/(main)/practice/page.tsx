@@ -4,7 +4,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { sessionsApi, Message, ttsApi } from "@/lib/api";
-import { Mic, Send, MicOff, Sparkles, Volume2, Bot, User, MessageSquare } from "lucide-react";
+import {
+  Mic, Send, MicOff, Sparkles, Volume2, Bot, User,
+  MessageSquare, StopCircle, Globe, ChevronDown, ChevronUp,
+  Languages, RefreshCw, AlertCircle, ImageOff, CheckCircle2, Play,
+} from "lucide-react";
 
 /* ──────────── Scene background helper ──────────── */
 function getSceneBg(sceneKey: string, difficulty: string): string {
@@ -17,15 +21,17 @@ interface SpeechState {
   isSupported: boolean;
   transcript: string;
   error: string;
+  volume: number; // simulated volume 0~1
 }
 
 function useSpeechRecognition() {
   const [state, setState] = useState<SpeechState>({
-    isListening: false, isSupported: false, transcript: "", error: "",
+    isListening: false, isSupported: false, transcript: "", error: "", volume: 0,
   });
   const recognitionRef = useRef<any>(null);
   const shouldRestart = useRef(false);
   const finalTextRef = useRef("");
+  const volumeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -49,16 +55,20 @@ function useSpeechRecognition() {
       setState((s) => ({ ...s, transcript: display }));
     };
 
+    recognition.onspeechstart = () => setState((s) => ({ ...s, volume: 0.7 }));
+    recognition.onspeechend = () => setState((s) => ({ ...s, volume: 0.3 }));
+    recognition.onaudiostart = () => setState((s) => ({ ...s, volume: 0.5 }));
+
     recognition.onerror = (event: any) => {
       if (event.error === "no-speech" || event.error === "aborted") return;
-      setState((s) => ({ ...s, error: event.error, isListening: false }));
+      setState((s) => ({ ...s, error: event.error, isListening: false, volume: 0 }));
     };
 
     recognition.onend = () => {
       if (shouldRestart.current) {
         try { recognition.start(); } catch { /* already started */ }
       } else {
-        setState((s) => ({ ...s, isListening: false }));
+        setState((s) => ({ ...s, isListening: false, volume: 0 }));
       }
     };
 
@@ -69,12 +79,32 @@ function useSpeechRecognition() {
     };
   }, []);
 
+  // Simulate volume fluctuation while listening
+  useEffect(() => {
+    if (state.isListening) {
+      volumeIntervalRef.current = setInterval(() => {
+        setState((s) => ({
+          ...s,
+          volume: Math.max(0.15, Math.min(0.95, 0.5 + Math.random() * 0.4)),
+        }));
+      }, 120);
+    } else {
+      if (volumeIntervalRef.current) {
+        clearInterval(volumeIntervalRef.current);
+        volumeIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+    };
+  }, [state.isListening]);
+
   const start = useCallback(() => {
     const rec = recognitionRef.current;
     if (!rec) return;
     shouldRestart.current = true;
     finalTextRef.current = "";
-    setState((s) => ({ ...s, isListening: true, error: "", transcript: "" }));
+    setState((s) => ({ ...s, isListening: true, error: "", transcript: "", volume: 0.3 }));
     try { rec.start(); } catch { /* already started */ }
   }, []);
 
@@ -82,7 +112,7 @@ function useSpeechRecognition() {
     const rec = recognitionRef.current;
     if (!rec) return;
     shouldRestart.current = false;
-    setState((s) => ({ ...s, isListening: false }));
+    setState((s) => ({ ...s, isListening: false, volume: 0 }));
     try { rec.stop(); } catch { /* ignore */ }
   }, []);
 
@@ -100,19 +130,41 @@ function playBase64Audio(base64: string, format = "mp3"): Promise<void> {
   });
 }
 
+/* ──────────── Recording Waveform ──────────── */
+function RecordingWaveform({ volume, isListening }: { volume: number; isListening: boolean }) {
+  if (!isListening) return null;
+  const bars = 7;
+  return (
+    <div className="flex items-center gap-[3px] h-8">
+      {Array.from({ length: bars }).map((_, i) => {
+        const h = 8 + volume * 24 * (0.5 + 0.5 * Math.sin(i * 0.8));
+        return (
+          <div
+            key={i}
+            className="w-[3px] rounded-full bg-red-400 transition-all duration-100"
+            style={{ height: `${h}px`, opacity: 0.6 + volume * 0.4 }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════
    Chat Bubble Component
    ══════════════════════════════════════════════════════════════ */
 function ChatBubble({
   message, isSpeaking, isAutoPlaying, onReplay,
-  userInitial, sceneKey,
+  userInitial, translationCn, showTranslation, onToggleTranslation,
 }: {
-  message: Message;
+  message: Message & { translation_cn?: string };
   isSpeaking: boolean;
   isAutoPlaying: boolean;
   onReplay: (id: number, text: string) => void;
   userInitial: string;
-  sceneKey: string;
+  translationCn?: string;
+  showTranslation?: boolean;
+  onToggleTranslation?: (id: number) => void;
 }) {
   const isUser = message.role === "user";
 
@@ -125,6 +177,9 @@ function ChatBubble({
                           shadow-lg shadow-indigo-500/20">
             {message.content}
           </div>
+          <p className="text-right text-[10px] text-white/25 mt-1 mr-1">
+            {formatTimestamp(message.created_at)}
+          </p>
         </div>
         {/* User avatar */}
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#C8956C] to-[#E0B894]
@@ -137,6 +192,8 @@ function ChatBubble({
   }
 
   // AI message
+  const hasTranslation = !!translationCn;
+
   return (
     <div className="flex gap-3 animate-slide-up">
       {/* AI avatar */}
@@ -152,6 +209,29 @@ function ChatBubble({
                         text-[#1E293B] shadow-md">
           {message.content}
         </div>
+
+        {/* Translation (expandable) */}
+        {hasTranslation && (
+          <div className="mt-1.5 ml-1">
+            <button
+              onClick={() => onToggleTranslation?.(message.id)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px]
+                         text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+            >
+              <Languages className="w-3 h-3" />
+              {showTranslation ? "收起翻译" : "查看翻译"}
+              {showTranslation ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+            {showTranslation && (
+              <div className="mt-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs
+                              text-white/60 leading-relaxed animate-fade-in">
+                {translationCn}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TTS controls */}
         <div className="flex items-center gap-2 mt-1.5 ml-1">
           {isAutoPlaying ? (
             <span className="inline-flex items-center gap-1.5 text-[10px] text-[#5B4FCF]">
@@ -169,7 +249,7 @@ function ChatBubble({
                           transition-all duration-200 ${
                             isSpeaking
                               ? "text-text-light/30 cursor-not-allowed"
-                              : "text-text-light/60 hover:text-[#5B4FCF] hover:bg-[#5B4FCF]/8"
+                              : "text-white/40 hover:text-[#9B8FFF] hover:bg-white/8"
                           }`}
               title="点击重新播放"
             >
@@ -177,6 +257,9 @@ function ChatBubble({
               重播
             </button>
           )}
+          <span className="text-[10px] text-white/20">
+            {formatTimestamp(message.created_at)}
+          </span>
         </div>
       </div>
     </div>
@@ -184,40 +267,125 @@ function ChatBubble({
 }
 
 /* ══════════════════════════════════════════════════════════════
-   No Session View
+   No Session View — Step-by-step onboarding
    ══════════════════════════════════════════════════════════════ */
 function NoSessionView() {
+  const { scenes, difficulties, models, currentScene, currentDifficulty, currentModel } = useAppStore();
+  const currentSceneData = scenes.find((s) => s.key === currentScene);
+  const currentModelData = models.find((m) => m.key === currentModel);
+  const currentDifficultyData = difficulties.find((d) => d.key === currentDifficulty);
+  const DIFFICULTY_ICONS: Record<string, string> = {
+    beginner: "🌱", intermediate: "🌿", advanced: "🌳",
+  };
+
+  const STEPS = [
+    { icon: currentSceneData?.icon || "💬", title: "选场景",
+      desc: currentSceneData?.name || "职场面试", detail: currentSceneData?.description || "",
+      active: true },
+    { icon: DIFFICULTY_ICONS[currentDifficulty] || "📊", title: "定难度",
+      desc: currentDifficultyData?.name || "初级", detail: (currentDifficultyData?.name || "初级") + "难度",
+      active: true },
+    { icon: currentModelData?.icon || "🤖", title: "选模型",
+      desc: currentModelData?.name || "GPT-4o", detail: currentModelData?.description?.slice(0, 30) || "",
+      active: true },
+  ];
+
+  const handleQuickStart = () => {
+    // Create session directly from NoSessionView
+    const { createSession } = useAppStore.getState();
+    createSession();
+    // The store handles the redirect via the pathname
+    window.location.href = "/practice";
+  };
+
   return (
-    <div className="h-full flex items-center justify-center p-6 bg-gradient-to-br from-[#FAFAF8] to-[#F0F0EB]">
-      <div className="text-center max-w-md animate-fade-in">
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#5B4FCF]/15 to-[#7C6FF7]/10
-                        border border-[#5B4FCF]/15 flex items-center justify-center mx-auto mb-6
-                        animate-float shadow-lg shadow-indigo-500/5">
-          <MessageSquare className="w-12 h-12 text-[#5B4FCF]/60" />
+    <div className="h-full flex items-center justify-center p-8 bg-gradient-to-br from-[#FAFAF8] to-[#F0F0EB]">
+      <div className="max-w-lg w-full mx-auto animate-fade-in">
+        {/* Hero icon */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#5B4FCF]/15 to-[#7C6FF7]/10
+                          border border-[#5B4FCF]/15 flex items-center justify-center mx-auto mb-5
+                          shadow-lg shadow-indigo-500/5">
+            <MessageSquare className="w-10 h-10 text-[#5B4FCF]/60" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-text-primary mb-2">
+            开始你的英语对话之旅
+          </h2>
+          <p className="text-text-secondary text-sm leading-relaxed max-w-sm mx-auto">
+            三步完成配置，即刻与 AI 开始沉浸式口语练习
+          </p>
         </div>
-        <h2 className="text-2xl font-extrabold text-text-primary mb-3">
-          开始你的英语对话之旅
-        </h2>
-        <p className="text-text-secondary text-sm mb-8 leading-relaxed">
-          在左侧控制台选择场景与难度，点击
-          <span className="font-bold text-[#5B4FCF] mx-1">「新建会话」</span>
-          即可开始 AI 陪练
-        </p>
-        <div className="grid grid-cols-3 gap-3 text-left">
-          {[
-            { icon: "💬", title: "选场景", desc: "职场/餐厅/会议" },
-            { icon: "🎯", title: "定难度", desc: "初级/中级/高级" },
-            { icon: "✨", title: "开练", desc: "AI 即刻陪练" },
-          ].map((item) => (
-            <div key={item.title}
-              className="p-3.5 rounded-2xl bg-white border border-border/60 shadow-sm
-                         hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-              <div className="text-2xl mb-1">{item.icon}</div>
-              <div className="text-xs font-bold text-text-primary">{item.title}</div>
-              <div className="text-[10px] text-text-light mt-0.5">{item.desc}</div>
+
+        {/* Step-by-step guide with visual connectors */}
+        <div className="relative flex items-start justify-between mb-8 px-2">
+          {/* Connecting line */}
+          <div className="absolute top-8 left-[15%] right-[15%] h-[2px] bg-gradient-to-r from-[#5B4FCF]/30 via-[#7C6FF7]/20 to-[#5B4FCF]/30" />
+
+          {STEPS.map((step, i) => (
+            <div key={step.title} className="relative flex flex-col items-center text-center z-10 group">
+              {/* Step circle */}
+              <div className="w-[52px] h-[52px] rounded-2xl bg-white border-2 border-[#5B4FCF]/20
+                              flex items-center justify-center text-xl mb-2.5
+                              shadow-md shadow-indigo-500/5
+                              group-hover:border-[#5B4FCF]/40 group-hover:shadow-lg group-hover:shadow-indigo-500/10
+                              group-hover:-translate-y-1
+                              transition-all duration-200">
+                <span>{step.icon}</span>
+              </div>
+              {/* Label */}
+              <p className="text-xs font-bold text-text-primary mb-0.5">{step.title}</p>
+              <p className="text-[11px] text-[#5B4FCF] font-semibold">{step.desc}</p>
+              {step.detail && (
+                <p className="text-[9px] text-text-light/60 mt-0.5 hidden sm:block max-w-[100px]">
+                  {step.detail}
+                </p>
+              )}
             </div>
           ))}
         </div>
+
+        {/* Configuration summary bar */}
+        <div className="mb-6 px-4 py-3 rounded-2xl bg-white border border-border/60 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-sm">
+              <span>{currentSceneData?.icon || "💼"} {currentSceneData?.name || "职场面试"}</span>
+              <span className="text-text-light">·</span>
+              <span>{DIFFICULTY_ICONS[currentDifficulty] || "📊"} {currentDifficultyData?.name || "初级"}</span>
+              <span className="text-text-light">·</span>
+              <span>{currentModelData?.icon || "🤖"} {currentModelData?.name || "GPT-4o"}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              <span className="text-[10px] font-semibold text-emerald-600">就绪</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="text-center mb-6">
+          <p className="text-text-secondary text-sm mb-4 leading-relaxed">
+            当前配置可直接开始练习，或在左侧面板调整场景、难度与模型
+          </p>
+          <button
+            onClick={handleQuickStart}
+            className="group inline-flex items-center gap-2.5 px-10 py-3.5 rounded-2xl text-base font-bold text-white
+                       bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7]
+                       shadow-xl shadow-indigo-500/30
+                       hover:shadow-2xl hover:shadow-indigo-500/45 hover:-translate-y-0.5 hover:scale-[1.02]
+                       active:scale-[0.98]
+                       transition-all duration-200
+                       relative overflow-hidden"
+          >
+            <span className="absolute inset-0 bg-[linear-gradient(110deg,transparent,transparent,50%,rgba(255,255,255,0.15),transparent,transparent)] translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700" />
+            <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            新建会话
+          </button>
+        </div>
+
+        {/* Keyboard hint */}
+        <p className="text-center text-[10px] text-text-light/50">
+          也可在左侧〈练习控制台〉中调整配置后点击「新建会话」
+        </p>
       </div>
     </div>
   );
@@ -227,20 +395,25 @@ function NoSessionView() {
    Main Practice Page
    ══════════════════════════════════════════════════════════════ */
 export default function PracticePage() {
-  const { scenes, difficulties, activeSession, endSession } = useAppStore();
+  const { scenes, difficulties, models, activeSession, endSession } = useAppStore();
   const user = useAuthStore((s) => s.user);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<(Message & { translation_cn?: string })[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [failedText, setFailedText] = useState("");
   const [speakingMap, setSpeakingMap] = useState<Record<number, boolean>>({});
   const [autoPlayedIds, setAutoPlayedIds] = useState<Set<number>>(new Set());
   const [autoPlayingId, setAutoPlayingId] = useState<number | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const speech = useSpeechRecognition();
+  const [bgError, setBgError] = useState(false);
+  const [expandedTranslations, setExpandedTranslations] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeechRecognition();
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scene = scenes.find((s) => s.key === activeSession?.scene_key);
   const difficulty = difficulties.find((d) => d.key === activeSession?.difficulty);
+  const model = models.find((m) => m.key === activeSession?.model);
   const sceneKey = activeSession?.scene_key || "job_interview";
   const bgImage = getSceneBg(sceneKey, activeSession?.difficulty || "beginner");
   const userInitial = user?.username?.charAt(0).toUpperCase() || "U";
@@ -264,11 +437,35 @@ export default function PracticePage() {
       sessionsApi.getMessages(activeSession.id).then(({ data }) => {
         setMessages(data);
         setAutoPlayedIds(new Set());
+        setExpandedTranslations(new Set());
+        setBgError(false);
       }).catch(() => setMessages([]));
     } else {
       setMessages([]);
     }
   }, [activeSession?.id]);
+
+  // Load session detail for translations
+  useEffect(() => {
+    if (!activeSession || messages.length === 0) return;
+    const aiMsgsWithoutTranslation = messages.filter(
+      (m) => m.role === "ai" && !m.translation_cn
+    );
+    if (aiMsgsWithoutTranslation.length === 0) return;
+
+    sessionsApi.getDetail(activeSession.id).then(({ data }) => {
+      if (!data.messages) return;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const detailMsg = data.messages.find((dm) => dm.id === msg.id);
+          if (detailMsg?.translation_cn) {
+            return { ...msg, translation_cn: detailMsg.translation_cn };
+          }
+          return msg;
+        })
+      );
+    }).catch(() => {});
+  }, [activeSession?.id, messages.length]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -290,14 +487,25 @@ export default function PracticePage() {
     if (!text.trim() || !activeSession || sending) return;
     const t = text.trim();
     if (t === input.trim()) setInput("");
+    setFailedText("");
+    setSendError("");
     setSending(true);
     try {
       const { data } = await sessionsApi.sendMessage(activeSession.id, t);
       setMessages(data);
-    } catch (err) {
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.detail || "消息发送失败，请重试";
+      setSendError(errMsg);
+      setFailedText(t);
       console.error("Failed to send message:", err);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleRetry = () => {
+    if (failedText) {
+      handleSendWithText(failedText);
     }
   };
 
@@ -326,10 +534,33 @@ export default function PracticePage() {
     }
   };
 
+  const handleToggleTranslation = (msgId: number) => {
+    setExpandedTranslations((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
+      return next;
+    });
+  };
+
   const handleEndSession = async () => {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
     await endSession();
     window.location.href = "/history";
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // Audio ref for cleanup
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   if (!activeSession) return <NoSessionView />;
 
@@ -339,17 +570,34 @@ export default function PracticePage() {
     <div className="h-full flex flex-col relative">
       {/* ── Scene Background ── */}
       <div className="absolute inset-0 z-0">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${bgImage})` }}
-        />
+        {!bgError && (
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: `url(${bgImage})` }}
+          >
+            <img
+              src={bgImage}
+              alt=""
+              className="hidden"
+              onError={() => setBgError(true)}
+            />
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-[#0F1119]/85 via-[#1A1D28]/75 to-[#2A2E3D]/90" />
+        {bgError && (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#1A1D28] via-[#232738] to-[#2A2E3D] flex items-center justify-center">
+            <div className="text-center opacity-30">
+              <ImageOff className="w-12 h-12 text-white/20 mx-auto mb-2" />
+              <p className="text-white/20 text-xs">{scene?.icon} {scene?.name}</p>
+            </div>
+          </div>
+        )}
         {/* Subtle grain/vignette effect */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(15,17,25,0.6)_100%)]" />
       </div>
 
       {/* ── Session Header ── */}
-      <div className="relative z-10 flex items-center gap-4 px-6 py-3.5 shrink-0
+      <div className="relative z-10 flex items-center gap-4 px-6 py-3 shrink-0
                       bg-gradient-to-r from-[#1A1D28]/90 to-[#232738]/90 backdrop-blur-md
                       border-b border-white/5">
         <div className="flex items-center gap-3">
@@ -362,26 +610,45 @@ export default function PracticePage() {
               {scene?.name || "Practice"}
               <span className="text-white/40 font-normal"> · {difficulty?.name || ""}</span>
             </h3>
-            <p className="text-white/35 text-[11px] leading-tight mt-0.5">
-              {scene?.description || ""}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-white/35 text-[11px] leading-tight">
+                {scene?.description || ""}
+              </p>
+              {model && (
+                <span className="text-[10px] text-white/20 bg-white/5 px-1.5 py-0.5 rounded">
+                  {model.icon} {model.name}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Round counter */}
-        <div className="ml-auto flex items-center gap-4">
+        {/* Round counter + Live indicator */}
+        <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/8">
             <MessageSquare className="w-3.5 h-3.5 text-[#9B8FFF]" />
             <span className="text-white/60 text-xs font-medium">{roundCount} 轮对话</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
             <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider">Live</span>
           </div>
+
+          {/* End Session Button */}
+          <button
+            onClick={handleEndSession}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl
+                       bg-red-500/10 border border-red-500/20 text-red-400
+                       hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-300
+                       text-xs font-semibold transition-all duration-200"
+          >
+            <StopCircle className="w-3.5 h-3.5" />
+            结束会话
+          </button>
         </div>
       </div>
 
@@ -394,7 +661,12 @@ export default function PracticePage() {
                               flex items-center justify-center mx-auto mb-4">
                 <Sparkles className="w-8 h-8 text-[#9B8FFF]/60" />
               </div>
-              <p className="text-white/40 text-sm">AI 正在准备对话...</p>
+              <p className="text-white/40 text-sm mb-1">
+                {scene?.icon} 正在准备 {scene?.name} 场景...
+              </p>
+              <p className="text-white/20 text-xs">
+                点击下方麦克风或输入英语开始对话
+              </p>
             </div>
           </div>
         )}
@@ -407,7 +679,9 @@ export default function PracticePage() {
             isAutoPlaying={autoPlayingId === msg.id}
             onReplay={handleReplay}
             userInitial={userInitial}
-            sceneKey={sceneKey}
+            translationCn={msg.translation_cn}
+            showTranslation={expandedTranslations.has(msg.id)}
+            onToggleTranslation={handleToggleTranslation}
           />
         ))}
 
@@ -418,10 +692,15 @@ export default function PracticePage() {
                             border border-white/10 flex items-center justify-center shadow-lg">
               <Bot className="w-4.5 h-4.5 text-[#9B8FFF]" />
             </div>
-            <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 backdrop-blur-sm">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "0ms" }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "150ms" }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "300ms" }} />
+            <div className="px-5 py-3 rounded-2xl rounded-bl-md bg-white/10 backdrop-blur-sm border border-white/10">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-white/50">AI 正在思考</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#9B8FFF] animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -433,55 +712,102 @@ export default function PracticePage() {
       <div className="relative z-10 shrink-0 px-6 pb-5 pt-3
                       bg-gradient-to-t from-[#1A1D28]/95 via-[#1A1D28]/80 to-transparent
                       backdrop-blur-sm">
-        <div className="flex items-center gap-3 max-w-3xl mx-auto">
+        {/* Send error with retry */}
+        {sendError && (
+          <div className="max-w-3xl mx-auto mb-3 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20
+                          flex items-center justify-between animate-fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="text-red-400 text-xs">{sendError}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSendError("")}
+                className="text-red-400/60 hover:text-red-400 text-xs transition-colors"
+              >
+                忽略
+              </button>
+              <button
+                onClick={handleRetry}
+                className="flex items-center gap-1 px-3 py-1 rounded-lg bg-red-500/15 border border-red-500/25
+                           text-red-400 hover:bg-red-500/25 text-xs font-medium transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                重试
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Voice recording waveform overlay */}
+        {speech.isListening && (
+          <div className="max-w-3xl mx-auto mb-2 flex items-center justify-center gap-3 animate-fade-in">
+            <RecordingWaveform volume={speech.volume} isListening={speech.isListening} />
+            <span className="text-red-400/80 text-xs font-medium animate-pulse">
+              🎤 正在聆听...
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-end gap-3 max-w-3xl mx-auto">
           {/* Mic Button */}
           {speech.isSupported ? (
             <button
               onClick={speech.isListening ? speech.stop : speech.start}
               disabled={sending}
               className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white
-                          shadow-lg transition-all duration-300 ${
+                          shadow-lg transition-all duration-300 shrink-0 ${
                             speech.isListening
-                              ? "bg-red-500 animate-pulse shadow-red-500/30"
+                              ? "bg-red-500 animate-pulse shadow-red-500/30 scale-105"
                               : "bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-500/25 hover:scale-105 active:scale-95"
                           }
                           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100`}
-              title={speech.isListening ? "停止录音" : "开始语音输入"}
+              title={speech.isListening ? "停止录音 (Stop)" : "开始语音输入 (Start Speaking)"}
             >
               {speech.isListening ? <MicOff className="w-4.5 h-4.5" /> : <Mic className="w-4.5 h-4.5" />}
             </button>
           ) : (
             <button
               disabled
-              className="w-11 h-11 rounded-2xl bg-white/5 flex items-center justify-center text-white/30 cursor-not-allowed"
+              className="w-11 h-11 rounded-2xl bg-white/5 flex items-center justify-center text-white/30 cursor-not-allowed shrink-0"
               title="浏览器不支持语音识别"
             >
               <MicOff className="w-4.5 h-4.5" />
             </button>
           )}
 
-          {/* Text Input */}
+          {/* Text Input — textarea for multiline support */}
           <div className="flex-1 relative">
-            <input
-              type="text"
+            <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={speech.isListening ? "🎤 正在聆听... 请说英语" : "输入英语或点击麦克风语音输入..."}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                speech.isListening
+                  ? "🎤 正在聆听... 请说英语"
+                  : "输入英语或点击麦克风语音输入... (Shift+Enter 换行)"
+              }
               disabled={sending || speech.isListening}
-              className={`w-full px-5 py-3 pr-12 rounded-2xl text-sm
+              rows={1}
+              className={`w-full px-5 py-3 pr-12 rounded-2xl text-sm resize-none
                           bg-white/8 border backdrop-blur-sm text-white
                           placeholder:text-white/30 focus:outline-none
-                          transition-all duration-200 ${
+                          transition-all duration-200 min-h-[48px] max-h-[120px] ${
                             speech.isListening
                               ? "border-red-400/50 ring-2 ring-red-400/10"
                               : "border-white/10 focus:border-[#5B4FCF]/50 focus:ring-2 focus:ring-[#5B4FCF]/10"
                           }`}
+              style={{ height: "auto" }}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 120) + "px";
+              }}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || sending}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl
+              disabled={!input.trim() || sending || speech.isListening}
+              className="absolute right-2 bottom-2 w-8 h-8 rounded-xl
                          bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] text-white
                          flex items-center justify-center
                          hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-105
@@ -499,10 +825,28 @@ export default function PracticePage() {
           {speech.error
             ? `⚠️ 语音错误: ${speech.error} — 请重试或手动输入`
             : speech.isListening
-              ? "🎤 录音中... 再次点击麦克风停止并自动发送"
-              : "点击 🎤 语音输入 · AI 消息自动朗读 · 点击 重播 可再次收听 · 按 Enter 发送"}
+              ? "正在录音 — 再次点击麦克风停止并自动发送"
+              : `💡 语音输入 · AI 自动朗读 · 点击翻译查看中文 · ${model?.name || ""} 模型驱动`
+          }
         </p>
       </div>
     </div>
   );
+}
+
+/* ═══════════════════ 辅助函数 ═══════════════════ */
+
+function formatTimestamp(createdAt: string | null): string {
+  if (!createdAt) return "";
+  try {
+    const d = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "刚刚";
+    if (diffMin < 60) return `${diffMin}分钟前`;
+    return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }

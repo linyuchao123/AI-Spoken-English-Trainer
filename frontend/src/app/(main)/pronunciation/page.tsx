@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle, RefreshCw,
   Shuffle, Pencil, Volume2, Zap, BarChart3, CheckCircle2, XCircle, Lightbulb,
@@ -218,11 +218,17 @@ function WordErrorCard({ w }: { w: WordScore }) {
 
 export default function PronunciationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Text mode
-  const [textMode, setTextMode] = useState<"manual" | "random">("random");
+  const [textMode, setTextMode] = useState<"manual" | "random">((() => {
+    return searchParams.get("text") ? "manual" : "random";
+  })());
   const [textLength, setTextLength] = useState<keyof typeof ALL_TEXTS>("short");
-  const [referenceText, setReferenceText] = useState(getRandomText("short"));
+  const [referenceText, setReferenceText] = useState((() => {
+    const paramText = searchParams.get("text");
+    return paramText || getRandomText("short");
+  })());
 
   // Assessment state
   const [assessing, setAssessing] = useState(false);

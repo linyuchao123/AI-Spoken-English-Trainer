@@ -36,6 +36,8 @@ export const authApi = {
   logout: () => api.post("/api/auth/logout"),
 
   me: () => api.get<User>("/api/auth/me"),
+
+  githubLoginUrl: () => `${API_BASE}/api/auth/github/login`,
 };
 
 // ============================================================
@@ -241,8 +243,8 @@ export interface TTSResult {
 }
 
 export const ttsApi = {
-  speak: (text: string, voice = "default", provider = "edge") =>
-    api.post<TTSResult>("/api/tts/speak", { text, voice, provider }),
+  speak: (text: string, voice = "default", provider = "edge", rate = 1.0) =>
+    api.post<TTSResult>("/api/tts/speak", { text, voice, provider, rate }),
 
   getVoices: () => api.get<TTSVoices>("/api/tts/voices"),
 };
