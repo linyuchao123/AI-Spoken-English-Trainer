@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { sessionsApi, SessionDetail, DetailMessage } from "@/lib/api";
-import { ArrowLeft, Bot, User, Mic, AlertCircle, CheckCircle2, Lightbulb, TrendingUp, Clock, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Bot, User, Mic, AlertCircle, CheckCircle2, Lightbulb, TrendingUp, Clock, MessageSquare, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 
 /* ──── Expandable analysis panel ──── */
 function AnalysisPanel({ message, defaultOpen }: { message: DetailMessage; defaultOpen: boolean }) {
@@ -167,11 +167,14 @@ function MessageBubble({ message }: { message: DetailMessage }) {
 export default function HistoryDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = Number(params.id);
+  const isPrintMode = searchParams.get("print") === "1";
 
   const [data, setData] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showEvaluation, setShowEvaluation] = useState(false);
 
   useEffect(() => {
     if (!sessionId || isNaN(sessionId)) return;
@@ -179,6 +182,14 @@ export default function HistoryDetailPage() {
       .then(({ data: d }) => { setData(d); setLoading(false); })
       .catch((err) => { setError("加载失败: " + (err?.response?.data?.detail || err.message)); setLoading(false); });
   }, [sessionId]);
+
+  // Auto-print and expand evaluation in print mode
+  useEffect(() => {
+    if (!loading && data && isPrintMode) {
+      setShowEvaluation(true);
+      setTimeout(() => window.print(), 600);
+    }
+  }, [loading, data, isPrintMode]);
 
   if (loading) {
     return (
@@ -242,74 +253,88 @@ export default function HistoryDetailPage() {
         </div>
       </div>
 
-      {/* ── Multi-dimension Scores ── */}
+      {/* ── Collapsible Multi-dimension Scores ── */}
       {data.evaluation && (
-        <div className="shrink-0 bg-gradient-to-r from-[#5B4FCF]/4 via-white to-[#5B4FCF]/4 border-b border-border px-6 py-5">
+        <div className="shrink-0 bg-white border-b border-border px-6 py-2">
           <div className="max-w-4xl mx-auto">
-            <h3 className="text-xs font-bold text-text-light uppercase tracking-wider mb-3">多维度评分</h3>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-              {[
-                { label: "语法", score: data.evaluation.grammar_score, icon: "📝", color: "#6366F1" },
-                { label: "词汇", score: data.evaluation.vocabulary_score, icon: "📚", color: "#8B5CF6" },
-                { label: "流利度", score: data.evaluation.fluency_score, icon: "💬", color: "#06B6D4" },
-                { label: "表达", score: data.evaluation.expression_score, icon: "✨", color: "#F59E0B" },
-                { label: "自然度", score: data.evaluation.naturalness_score, icon: "🌿", color: "#10B981" },
-                { label: "情感", score: data.evaluation.emotion_score, icon: "🎯", color: "#EC4899" },
-              ].map((dim) => (
-                <div key={dim.label} className="bg-white rounded-xl p-3 text-center border border-border shadow-sm hover:shadow-md transition-shadow">
-                  <div className="text-lg mb-1">{dim.icon}</div>
-                  <div className="text-xl font-extrabold" style={{ color: dim.color }}>
-                    {dim.score}
-                  </div>
-                  <div className="text-[10px] text-text-light font-medium">{dim.label}</div>
-                  <div className="mt-1 w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${dim.score}%`, backgroundColor: dim.color }} />
-                  </div>
+            <button
+              onClick={() => setShowEvaluation(!showEvaluation)}
+              className="flex items-center gap-2 text-xs font-medium text-[#5B4FCF]/70 hover:text-[#5B4FCF] transition-colors w-full py-1"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              查看多维度评分与分析
+              {showEvaluation ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+              <span className="text-[10px] text-text-light font-normal ml-1">（共 6 维度 · AI 点评）</span>
+            </button>
+
+            {showEvaluation && (
+              <div className="py-4 space-y-4 animate-slide-up">
+                {/* Score grid */}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                  {[
+                    { label: "语法", score: data.evaluation.grammar_score, icon: "📝", color: "#6366F1" },
+                    { label: "词汇", score: data.evaluation.vocabulary_score, icon: "📚", color: "#8B5CF6" },
+                    { label: "流利度", score: data.evaluation.fluency_score, icon: "💬", color: "#06B6D4" },
+                    { label: "表达", score: data.evaluation.expression_score, icon: "✨", color: "#F59E0B" },
+                    { label: "自然度", score: data.evaluation.naturalness_score, icon: "🌿", color: "#10B981" },
+                    { label: "情感", score: data.evaluation.emotion_score, icon: "🎯", color: "#EC4899" },
+                  ].map((dim) => (
+                    <div key={dim.label} className="bg-[#FAFAF8] rounded-xl p-2.5 text-center border border-border/50">
+                      <div className="text-base mb-0.5">{dim.icon}</div>
+                      <div className="text-lg font-extrabold" style={{ color: dim.color }}>
+                        {dim.score}
+                      </div>
+                      <div className="text-[9px] text-text-light font-medium">{dim.label}</div>
+                      <div className="mt-1 w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${dim.score}%`, backgroundColor: dim.color }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Evaluation summary */}
-            {data.evaluation.summary && (
-              <p className="mt-4 text-xs text-text-secondary leading-relaxed bg-white/60 rounded-xl p-3 border border-border">
-                <span className="font-bold text-text-primary">AI 点评：</span>
-                {data.evaluation.summary}
-              </p>
-            )}
-
-            {/* Strengths & Weaknesses */}
-            {(data.evaluation.strengths.length > 0 || data.evaluation.weaknesses.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                {data.evaluation.strengths.length > 0 && (
-                  <div className="bg-green-50/60 rounded-xl p-3 border border-green-100">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                      <span className="text-xs font-bold text-green-700">做得好的</span>
-                    </div>
-                    <ul className="space-y-1">
-                      {data.evaluation.strengths.map((s, i) => (
-                        <li key={i} className="text-[11px] text-green-700 flex items-start gap-1">
-                          <span className="text-green-400 mt-0.5">•</span>
-                          {s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                {/* Summary */}
+                {data.evaluation.summary && (
+                  <p className="text-xs text-text-secondary leading-relaxed bg-[#FAFAF8] rounded-xl p-3 border border-border/50">
+                    <span className="font-bold text-text-primary">AI 点评：</span>
+                    {data.evaluation.summary}
+                  </p>
                 )}
-                {data.evaluation.weaknesses.length > 0 && (
-                  <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-100">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                      <span className="text-xs font-bold text-amber-700">需要改进的</span>
-                    </div>
-                    <ul className="space-y-1">
-                      {data.evaluation.weaknesses.map((w, i) => (
-                        <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1">
-                          <span className="text-amber-400 mt-0.5">•</span>
-                          {w}
-                        </li>
-                      ))}
-                    </ul>
+
+                {/* Strengths & Weaknesses */}
+                {(data.evaluation.strengths.length > 0 || data.evaluation.weaknesses.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {data.evaluation.strengths.length > 0 && (
+                      <div className="bg-green-50/40 rounded-xl p-3 border border-green-100">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-xs font-bold text-green-700">做得好的</span>
+                        </div>
+                        <ul className="space-y-1">
+                          {data.evaluation.strengths.map((s, i) => (
+                            <li key={i} className="text-[11px] text-green-700 flex items-start gap-1">
+                              <span className="text-green-400 mt-0.5">•</span>
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {data.evaluation.weaknesses.length > 0 && (
+                      <div className="bg-amber-50/40 rounded-xl p-3 border border-amber-100">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-xs font-bold text-amber-700">需要改进的</span>
+                        </div>
+                        <ul className="space-y-1">
+                          {data.evaluation.weaknesses.map((w, i) => (
+                            <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1">
+                              <span className="text-amber-400 mt-0.5">•</span>
+                              {w}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
