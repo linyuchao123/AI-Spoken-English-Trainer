@@ -264,6 +264,24 @@ export interface ScorePoint {
   score: number;
 }
 
+export interface ScoreBreakdown {
+  grammar_score: number;
+  vocabulary_score: number;
+  fluency_score: number;
+  expression_score: number;
+  naturalness_score: number;
+  emotion_score: number;
+}
+
+export interface SentenceAnalysisItem {
+  message_index: number;
+  original_en: string;
+  translation_cn: string;
+  pronunciation_issues: string[];
+  grammar_issues: string[];
+  expression_improvements: string[];
+}
+
 export interface ReportData {
   session_id: number;
   scene_name: string;
@@ -278,12 +296,16 @@ export interface ReportData {
   correction_count: number;
   error_stats: Record<string, number>;
   score_history: ScorePoint[];
+  score_breakdown: ScoreBreakdown | null;
   summary: string;
+  summary_cn: string;
   strengths: string[];
   weaknesses: string[];
   suggestions: string[];
   topics_covered: string[];
   level_assessment: string;
+  level_assessment_cn: string;
+  sentence_analyses: SentenceAnalysisItem[];
 }
 
 export const reportApi = {

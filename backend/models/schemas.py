@@ -181,6 +181,24 @@ class ScorePoint(BaseModel):
     score: float
 
 
+class SentenceAnalysisItem(BaseModel):
+    message_index: int
+    original_en: str = ""
+    translation_cn: str = ""
+    pronunciation_issues: list[str] = []
+    grammar_issues: list[str] = []
+    expression_improvements: list[str] = []
+
+
+class ScoreBreakdown(BaseModel):
+    grammar_score: float = 0
+    vocabulary_score: float = 0
+    fluency_score: float = 0
+    expression_score: float = 0
+    naturalness_score: float = 0
+    emotion_score: float = 0
+
+
 class ReportResponse(BaseModel):
     session_id: int
     scene_name: str
@@ -195,13 +213,18 @@ class ReportResponse(BaseModel):
     correction_count: int = 0
     error_stats: dict[str, int] = {}
     score_history: list[ScorePoint] = []
+    score_breakdown: Optional[ScoreBreakdown] = None
     # LLM analysis
     summary: str = ""
+    summary_cn: str = ""
     strengths: list[str] = []
     weaknesses: list[str] = []
     suggestions: list[str] = []
     topics_covered: list[str] = []
     level_assessment: str = ""
+    level_assessment_cn: str = ""
+    # Per-sentence analysis
+    sentence_analyses: list[SentenceAnalysisItem] = []
 
 
 # ============================================================
