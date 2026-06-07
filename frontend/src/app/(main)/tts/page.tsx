@@ -402,13 +402,14 @@ export default function TTSPage() {
                         </div>
                       </div>
                       {/* Delete button */}
-                      <button
+                      <span
                         onClick={(e) => handleDeleteHistory(e, item.id)}
-                        className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-danger/60 transition-all p-0.5"
+                        className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-danger/60 transition-all p-0.5 cursor-pointer"
                         title="删除"
+                        role="button"
                       >
                         <Trash2 className="w-3 h-3" />
-                      </button>
+                      </span>
                     </div>
                   </button>
                 );

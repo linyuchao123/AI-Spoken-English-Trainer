@@ -417,27 +417,29 @@ export default function ASRPage() {
                         </div>
                       </div>
                       <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
+                        <span
                           onClick={(e) => {
                             e.stopPropagation();
                             handleReplay(item.text, item.id);
                           }}
-                          className={`p-1 rounded ${
+                          className={`p-1 rounded cursor-pointer ${
                             isPlaying
                               ? "text-[#5B4FCF]"
                               : "text-white/20 hover:text-white/60"
                           } transition-colors`}
                           title="朗读"
+                          role="button"
                         >
                           <Volume2 className="w-3 h-3" />
-                        </button>
-                        <button
+                        </span>
+                        <span
                           onClick={(e) => handleDeleteHistory(e, item.id)}
-                          className="p-1 rounded text-white/20 hover:text-danger/60 transition-colors"
+                          className="p-1 rounded text-white/20 hover:text-danger/60 transition-colors cursor-pointer"
                           title="删除"
+                          role="button"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
+                        </span>
                       </div>
                     </div>
                   </button>
