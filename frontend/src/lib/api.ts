@@ -166,4 +166,34 @@ export const ttsApi = {
   getVoices: () => api.get<TTSVoices>("/api/tts/voices"),
 };
 
+// ============================================================
+// Pronunciation API
+// ============================================================
+
+export interface WordScore {
+  word: string;
+  accuracy_score: number;
+  error_type: string;
+}
+
+export interface PronunciationResult {
+  accuracy_score: number;
+  fluency_score: number;
+  completeness_score: number;
+  overall_score: number;
+  words: WordScore[];
+  error: string;
+}
+
+export const pronunciationApi = {
+  assess: (audio: Blob, reference_text: string) => {
+    const form = new FormData();
+    form.append("audio", audio, "recording.wav");
+    form.append("reference_text", reference_text);
+    return api.post<PronunciationResult>("/api/pronunciation/assess-safe", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+};
+
 export default api;
