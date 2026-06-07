@@ -143,6 +143,7 @@ class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
     voice: str = "default"
     provider: str = "edge"  # "edge", "azure", or "openai"
+    rate: float = 1.0  # 0.5~2.0, only supported by Edge TTS
 
 
 class TTSVoice(BaseModel):

@@ -42,6 +42,7 @@ def text_to_speech(
     text: str,
     voice: str = "default",
     provider: str = "edge",
+    rate: float = 1.0,
 ) -> bytes:
     """Convert text to speech. Priority chain: preferred provider → fallbacks."""
     if provider == "edge":
@@ -55,24 +56,27 @@ def text_to_speech(
 
     for attempt in chain:
         try:
-            return attempt(text, voice)
+            return attempt(text, voice, rate)
         except Exception as exc:
             logger.debug("%s failed: %s", attempt.__name__, exc)
 
     raise RuntimeError("All TTS providers failed")
 
 
-def _try_edge(text: str, voice: str) -> bytes:
+def _try_edge(text: str, voice: str, rate: float = 1.0) -> bytes:
     """Edge TTS (always available, no key needed)."""
     voice_name = voice if voice != "default" else DEFAULT_EDGE_VOICE
     if voice_name not in EDGE_VOICES and voice != "default":
         voice_name = DEFAULT_EDGE_VOICE
-    return asyncio.run(_edge_tts_async(text, voice_name))
+    return asyncio.run(_edge_tts_async(text, voice_name, rate))
 
 
-async def _edge_tts_async(text: str, voice_name: str) -> bytes:
+async def _edge_tts_async(text: str, voice_name: str, rate: float = 1.0) -> bytes:
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice_name)
+    # Convert float rate (0.5~2.0) to edge_tts format (e.g. "-50%", "+20%")
+    rate_pct = int((rate - 1.0) * 100)
+    rate_str = f"{rate_pct:+d}%"
+    communicate = edge_tts.Communicate(text, voice_name, rate=rate_str)
     chunks: list[bytes] = []
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -80,7 +84,7 @@ async def _edge_tts_async(text: str, voice_name: str) -> bytes:
     return b"".join(chunks)
 
 
-def _try_azure(text: str, voice: str) -> bytes:
+def _try_azure(text: str, voice: str, rate: float = 1.0) -> bytes:
     """Azure Speech TTS (requires AZURE_SPEECH_KEY)."""
     if not AZURE_SPEECH_KEY:
         raise RuntimeError("AZURE_SPEECH_KEY not configured")
@@ -110,7 +114,7 @@ def _try_azure(text: str, voice: str) -> bytes:
         raise RuntimeError(f"Azure unexpected: {result.reason}")
 
 
-def _try_openai(text: str, voice: str) -> bytes:
+def _try_openai(text: str, voice: str, rate: float = 1.0) -> bytes:
     """OpenAI TTS (requires OPENAI_API_KEY)."""
     from openai import OpenAI
     from config.settings import OPENAI_API_KEY
@@ -129,8 +133,8 @@ def _try_openai(text: str, voice: str) -> bytes:
     return response.content
 
 
-def tts_to_base64(text: str, voice: str = "default", provider: str = "edge") -> str:
-    audio_bytes = text_to_speech(text, voice=voice, provider=provider)
+def tts_to_base64(text: str, voice: str = "default", provider: str = "edge", rate: float = 1.0) -> str:
+    audio_bytes = text_to_speech(text, voice=voice, provider=provider, rate=rate)
     return base64.b64encode(audio_bytes).decode("utf-8")
 
 

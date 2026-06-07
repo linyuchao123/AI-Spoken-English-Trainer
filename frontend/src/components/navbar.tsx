@@ -91,9 +91,17 @@ export default function Navbar() {
       <div className="flex items-center gap-3 shrink-0">
         {user && (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C8956C] to-[#E0B894] flex items-center justify-center text-white text-sm font-bold shadow-md shadow-amber-500/20">
-              {user.username.charAt(0).toUpperCase()}
-            </div>
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.username}
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-white/10 shadow-md"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C8956C] to-[#E0B894] flex items-center justify-center text-white text-sm font-bold shadow-md shadow-amber-500/20">
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+            )}
             <span className="text-white/70 text-sm font-medium hidden sm:block">
               {user.username}
             </span>

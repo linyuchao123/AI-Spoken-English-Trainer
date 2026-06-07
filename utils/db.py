@@ -36,9 +36,11 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             username TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
+            password_hash TEXT DEFAULT '',
+            salt TEXT DEFAULT '',
             avatar_url TEXT DEFAULT '',
+            oauth_provider TEXT DEFAULT '',
+            oauth_id TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -113,6 +115,16 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_corrections_session ON grammar_corrections(session_id);
     """)
 
+    # Migration: add oauth columns if they don't exist (for existing databases)
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN oauth_provider TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN oauth_id TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     conn.commit()
     conn.close()
 
@@ -146,6 +158,62 @@ def create_user(email: str, username: str, password: str) -> Optional[int]:
         cursor.execute(
             "INSERT INTO users (email, username, password_hash, salt) VALUES (?, ?, ?, ?)",
             (email.strip().lower(), username.strip(), password_hash, salt),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        return user_id
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
+
+
+def get_or_create_oauth_user(
+    provider: str, oauth_id: str, email: str, username: str, avatar_url: str = ""
+) -> Optional[int]:
+    """Get an existing OAuth user or create a new one. Returns user ID or None."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Try to find existing user by OAuth provider + id
+    cursor.execute(
+        "SELECT id FROM users WHERE oauth_provider = ? AND oauth_id = ?",
+        (provider, oauth_id),
+    )
+    row = cursor.fetchone()
+    if row:
+        user_id = row["id"]
+        # Update avatar_url and username if changed
+        cursor.execute(
+            "UPDATE users SET avatar_url = ?, username = ? WHERE id = ?",
+            (avatar_url, username, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return user_id
+
+    # Try to find existing user by email (link accounts)
+    cursor.execute(
+        "SELECT id FROM users WHERE email = ?",
+        (email.strip().lower(),),
+    )
+    row = cursor.fetchone()
+    if row:
+        user_id = row["id"]
+        # Link OAuth to existing account
+        cursor.execute(
+            "UPDATE users SET oauth_provider = ?, oauth_id = ?, avatar_url = ?, username = ? WHERE id = ?",
+            (provider, oauth_id, avatar_url, username, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return user_id
+
+    # Create new OAuth user
+    try:
+        cursor.execute(
+            "INSERT INTO users (email, username, oauth_provider, oauth_id, avatar_url) VALUES (?, ?, ?, ?, ?)",
+            (email.strip().lower(), username.strip(), provider, oauth_id, avatar_url),
         )
         conn.commit()
         user_id = cursor.lastrowid
