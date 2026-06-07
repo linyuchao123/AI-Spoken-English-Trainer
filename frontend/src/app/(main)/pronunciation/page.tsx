@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle, RefreshCw,
@@ -234,6 +234,43 @@ export default function PronunciationPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  const STORAGE_KEY = "pronunciation_history_v1";
+  const SIDEBAR_KEY = "pronunciation_sidebar_v1";
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as HistoryItem[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setHistory(parsed);
+        }
+      }
+      const savedSidebar = localStorage.getItem(SIDEBAR_KEY);
+      if (savedSidebar !== null) {
+        setSidebarOpen(savedSidebar === "1");
+      }
+    } catch { /* ignore */ }
+    setHistoryLoaded(true);
+  }, []);
+
+  // Persist history
+  useEffect(() => {
+    if (!historyLoaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 50)));
+    } catch { /* ignore */ }
+  }, [history, historyLoaded]);
+
+  // Persist sidebar
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "1" : "0");
+    } catch { /* ignore */ }
+  }, [sidebarOpen]);
 
   // Count errors in result
   const countErrors = (r: PronunciationResult) =>
