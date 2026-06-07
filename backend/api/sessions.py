@@ -4,6 +4,7 @@ Sessions API: create, list, end sessions and manage messages.
 
 import sys
 import os
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -31,6 +32,7 @@ from utils.db import (
     get_session_scores,
     get_session_corrections,
     get_session_evaluation,
+    get_connection,
     add_message,
     delete_session,
     save_session_evaluation,
@@ -162,8 +164,7 @@ async def end_current_session(session_id: int, request: Request):
             },
         )
         # Update session avg_pronunciation_score with evaluation overall
-        import sqlite3
-        conn = __import__("utils.db", fromlist=["get_connection"]).get_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE sessions SET avg_pronunciation_score = ? WHERE id = ?",
@@ -172,7 +173,6 @@ async def end_current_session(session_id: int, request: Request):
         conn.commit()
         conn.close()
     except Exception as exc:
-        logger = __import__("logging").getLogger(__name__)
         logger.warning("Session evaluation skipped: %s", exc)
 
     session = get_session(session_id)
