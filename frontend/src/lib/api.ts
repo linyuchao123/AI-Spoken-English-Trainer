@@ -236,6 +236,8 @@ export interface WordScore {
   word: string;
   accuracy_score: number;
   error_type: string;
+  expected_pronunciation: string;
+  correction_cn: string;
 }
 
 export interface PronunciationResult {
@@ -243,7 +245,14 @@ export interface PronunciationResult {
   fluency_score: number;
   completeness_score: number;
   overall_score: number;
+  stress_score: number;
+  intonation_score: number;
+  rhythm_score: number;
   words: WordScore[];
+  phoneme_highlights: string[];
+  summary_en: string;
+  summary_cn: string;
+  suggestions: string[];
   error: string;
 }
 

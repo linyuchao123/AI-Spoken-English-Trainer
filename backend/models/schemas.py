@@ -161,6 +161,8 @@ class WordScoreResponse(BaseModel):
     word: str
     accuracy_score: float
     error_type: str  # "None", "Omission", "Insertion", "Mispronunciation"
+    expected_pronunciation: str = ""
+    correction_cn: str = ""
 
 
 class PronunciationResponse(BaseModel):
@@ -168,7 +170,18 @@ class PronunciationResponse(BaseModel):
     fluency_score: float = 0
     completeness_score: float = 0
     overall_score: float = 0
+    # Extended scores
+    stress_score: float = 0
+    intonation_score: float = 0
+    rhythm_score: float = 0
+    # Word detail
     words: list[WordScoreResponse] = []
+    # Phoneme highlights
+    phoneme_highlights: list[str] = []
+    # Summary
+    summary_en: str = ""
+    summary_cn: str = ""
+    suggestions: list[str] = []
     error: str = ""
 
 

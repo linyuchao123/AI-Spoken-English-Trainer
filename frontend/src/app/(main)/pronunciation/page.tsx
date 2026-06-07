@@ -1,10 +1,55 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle, RefreshCw } from "lucide-react";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Mic, MicOff, Loader2, Target, TrendingUp, AlertCircle, RefreshCw,
+  Shuffle, Pencil, Volume2, Zap, BarChart3, CheckCircle2, XCircle, Lightbulb
+} from "lucide-react";
 import { pronunciationApi, PronunciationResult, WordScore } from "@/lib/api";
 
-/* ---------- Web Speech Recognition Hook ---------- */
+/* ═══════════════════ 随机文本池 ═══════════════════ */
+
+const SHORT_TEXTS = [
+  "Hello, how are you doing today?",
+  "What time does the meeting start?",
+  "Could you please pass me the salt?",
+  "I really enjoyed the movie last night.",
+  "Where is the nearest subway station?",
+  "Nice to meet you, my name is Alex.",
+  "The weather is beautiful this morning.",
+  "Would you like a cup of coffee?",
+  "I need to finish this report by Friday.",
+  "She has been working here since 2020.",
+];
+
+const MEDIUM_TEXTS = [
+  "I've been learning English for about three years now, and I feel like I'm making good progress with my speaking skills.",
+  "The restaurant was quite crowded when we arrived, so we had to wait for about twenty minutes before getting a table.",
+  "If you want to improve your pronunciation, you should practice speaking out loud every day and listen to native speakers.",
+  "Technology has changed the way we communicate with each other, making it easier to stay in touch with friends and family.",
+  "Could you tell me how to get to the museum? I think I might have taken a wrong turn somewhere.",
+  "The most important thing about learning a new language is to not be afraid of making mistakes when you speak.",
+  "My favorite season is autumn because the weather is perfect and the changing leaves are absolutely beautiful.",
+  "Before making a decision, it's always a good idea to consider all the possible options and their consequences.",
+];
+
+const LONG_TEXTS = [
+  "Last summer, I traveled to Japan with my family and we spent two wonderful weeks exploring Tokyo, Kyoto, and Osaka. The food was incredible, the people were very friendly, and we learned so much about Japanese culture and history. One of my favorite experiences was visiting the ancient temples in Kyoto and participating in a traditional tea ceremony.",
+  "The importance of regular exercise cannot be overstated. Not only does it help maintain a healthy weight and strengthen your cardiovascular system, but it also has significant benefits for your mental health. Studies have shown that people who exercise regularly tend to have lower rates of depression and anxiety, better sleep quality, and improved cognitive function.",
+  "Climate change is one of the most pressing issues facing our world today. Rising global temperatures are causing ice caps to melt, sea levels to rise, and weather patterns to become increasingly unpredictable. If we don't take immediate action to reduce our carbon footprint and transition to renewable energy sources, the consequences could be catastrophic for future generations.",
+  "When I first started my career as a software developer, I had no idea how much there was to learn. Every day brought new challenges and opportunities to grow. Looking back now after ten years, I can honestly say that the key to success in this field is never stopping learning. Technology evolves so quickly that what you knew yesterday might already be outdated today.",
+];
+
+const ALL_TEXTS = { short: SHORT_TEXTS, medium: MEDIUM_TEXTS, long: LONG_TEXTS } as const;
+
+function getRandomText(length: keyof typeof ALL_TEXTS): string {
+  const pool = ALL_TEXTS[length];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/* ═══════════════════ 语音识别 Hook ═══════════════════ */
+
 function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [recognizedText, setRecognizedText] = useState("");
@@ -26,16 +71,12 @@ function useSpeechRecognition() {
     recognition.maxAlternatives = 1;
 
     let finalTranscript = "";
-
     recognition.onresult = (event: any) => {
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interim += transcript;
-        }
+        if (event.results[i].isFinal) finalTranscript += transcript + " ";
+        else interim += transcript;
       }
       setRecognizedText(finalTranscript.trim());
       setInterimText(interim);
@@ -43,9 +84,7 @@ function useSpeechRecognition() {
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error);
-      if (event.error !== "no-speech") {
-        setIsListening(false);
-      }
+      if (event.error !== "no-speech") setIsListening(false);
     };
 
     recognition.onend = () => {
@@ -61,12 +100,9 @@ function useSpeechRecognition() {
   }, []);
 
   const stop = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (recognition) {
-      recognition.stop();
-      setIsListening(false);
-      setInterimText("");
-    }
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    setInterimText("");
   }, []);
 
   const reset = useCallback(() => {
@@ -78,71 +114,122 @@ function useSpeechRecognition() {
   return { isListening, recognizedText, interimText, start, stop, reset };
 }
 
-/* ---------- Score Gauge ---------- */
-function ScoreGauge({ label, score, color }: { label: string; score: number; color: string }) {
-  const angle = (score / 100) * 180 - 90;
+/* ═══════════════════ 评分圆环 ═══════════════════ */
+
+function ScoreRing({ score, label, size = 80 }: { score: number; label?: string; size?: number }) {
+  const pct = Math.min(Math.max(score, 0), 100);
+  const strokeW = size * 0.1;
+  const r = (size - strokeW) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  const color = pct >= 85 ? "#10b981" : pct >= 70 ? "#f59e0b" : pct >= 50 ? "#f97316" : "#ef4444";
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="relative w-14 h-7 overflow-hidden">
-        <div className="absolute bottom-0 left-0 w-full h-14 rounded-full border-[5px] border-gray-100"
-          style={{ clipPath: "polygon(0 50%, 100% 50%, 100% 100%, 0 100%)" }} />
-        <div className="absolute bottom-0 left-0 w-full h-14 rounded-full border-[5px] border-transparent"
-          style={{
-            clipPath: "polygon(0 50%, 100% 50%, 100% 100%, 0 100%)",
-            borderTopColor: "transparent",
-            borderRightColor: angle > 0 ? color : "transparent",
-            borderBottomColor: color,
-            borderLeftColor: angle < 0 ? color : "transparent",
-            transform: `rotate(${angle}deg)`,
-            transformOrigin: "center center",
-          }} />
-        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[10px] font-bold" style={{ color }}>
+      <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e5e7eb" strokeWidth={strokeW} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color}
+            strokeWidth={strokeW} strokeLinecap="round"
+            strokeDasharray={circ} strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 1s ease" }} />
+        </svg>
+        <span className="absolute text-xl font-extrabold" style={{ color }}>{Math.round(score)}</span>
+      </div>
+      {label && <span className="text-[10px] text-text-light font-medium">{label}</span>}
+    </div>
+  );
+}
+
+/* ═══════════════════ 维度评分条 ═══════════════════ */
+
+function DimBar({ label, score, icon, color }: { label: string; score: number; icon: React.ReactNode; color: string }) {
+  const pct = Math.min((score / 100) * 100, 100);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-text-primary flex items-center gap-1.5">
+          <span style={{ color }}>{icon}</span> {label}
+        </span>
+        <span className="text-[11px] font-extrabold" style={{ color: score >= 85 ? "#10b981" : score >= 70 ? "#f59e0b" : "#ef4444" }}>
           {Math.round(score)}
         </span>
       </div>
-      <span className="text-[10px] text-text-light">{label}</span>
-    </div>
-  );
-}
-
-/* ---------- Word List ---------- */
-function WordList({ words }: { words: WordScore[] }) {
-  if (!words.length) return null;
-  return (
-    <div className="mt-4">
-      <h4 className="text-xs font-semibold text-text-primary mb-2">📝 逐词分析</h4>
-      <div className="flex flex-wrap gap-1.5">
-        {words.map((w, i) => {
-          const hasError = w.error_type && w.error_type !== "None";
-          return (
-            <div key={i}
-              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${
-                hasError
-                  ? "bg-red-50 border-red-200 text-red-700"
-                  : w.accuracy_score >= 90
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-amber-50 border-amber-200 text-amber-700"
-              }`}
-              title={`${w.word}: ${w.accuracy_score}%${hasError ? ` (${w.error_type})` : ""}`}
-            >
-              {w.word}
-              {hasError && <span className="ml-1 text-[9px] opacity-60">{w.error_type}</span>}
-            </div>
-          );
-        })}
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   );
 }
 
-/* ---------- Page ---------- */
+/* ═══════════════════ 单词错误卡片 ═══════════════════ */
+
+function WordErrorCard({ w }: { w: WordScore }) {
+  const hasError = w.error_type && w.error_type !== "None";
+  return (
+    <div className={`rounded-lg p-2.5 border text-xs transition-colors ${
+      hasError
+        ? "bg-red-50 border-red-200"
+        : w.accuracy_score >= 90
+          ? "bg-emerald-50 border-emerald-200"
+          : "bg-amber-50 border-amber-200"
+    }`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className={`font-bold ${hasError ? "text-red-700" : "text-emerald-700"}`}>
+          {w.word}
+        </span>
+        <span className={`text-[10px] font-semibold ${hasError ? "text-red-500" : "text-emerald-500"}`}>
+          {Math.round(w.accuracy_score)}%
+        </span>
+      </div>
+      {hasError && (
+        <div className="space-y-0.5">
+          {w.expected_pronunciation && (
+            <p className="text-[10px] text-blue-700">
+              🔈 正确读音: <span className="font-mono font-semibold">{w.expected_pronunciation}</span>
+            </p>
+          )}
+          {w.correction_cn && (
+            <p className="text-[10px] text-red-600 leading-relaxed">{w.correction_cn}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════ 主页面 ═══════════════════ */
+
 export default function PronunciationPage() {
-  const [referenceText, setReferenceText] = useState("Hello, how are you doing today?");
+  const router = useRouter();
+
+  // Text mode
+  const [textMode, setTextMode] = useState<"manual" | "random">("random");
+  const [textLength, setTextLength] = useState<keyof typeof ALL_TEXTS>("short");
+  const [referenceText, setReferenceText] = useState(getRandomText("short"));
+
+  // Assessment state
   const [assessing, setAssessing] = useState(false);
   const [result, setResult] = useState<PronunciationResult | null>(null);
   const [error, setError] = useState("");
   const speech = useSpeechRecognition();
 
+  // Generate random text
+  const handleRandom = (length?: keyof typeof ALL_TEXTS) => {
+    const len = length || textLength;
+    const txt = getRandomText(len);
+    setReferenceText(txt);
+    setResult(null);
+    setError("");
+    speech.reset();
+  };
+
+  // Change length
+  const handleLengthChange = (len: keyof typeof ALL_TEXTS) => {
+    setTextLength(len);
+    if (textMode === "random") handleRandom(len);
+  };
+
+  // Assess
   const handleAssess = async () => {
     if (!speech.recognizedText || !referenceText.trim()) return;
     setAssessing(true);
@@ -164,141 +251,289 @@ export default function PronunciationPage() {
     setError("");
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 85) return "#10b981";
-    if (score >= 70) return "#f59e0b";
-    return "#ef4444";
+  // Jump to TTS
+  const goToTTS = () => {
+    const encoded = encodeURIComponent(referenceText.trim());
+    router.push(`/tts?text=${encoded}`);
   };
 
+  const scoreColor = (s: number) => s >= 85 ? "#10b981" : s >= 70 ? "#f59e0b" : "#ef4444";
+
   return (
-    <div className="max-w-3xl mx-auto py-8 px-6">
-      {/* Header */}
-      <div className="text-center mb-8 animate-slide-up">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400/20 to-teal-600/20 flex items-center justify-center mx-auto mb-4">
-          <Target className="w-8 h-8 text-emerald-500" />
+    <div className="max-w-4xl mx-auto py-8 px-6 animate-fade-in">
+      {/* ═══ Header ═══ */}
+      <div className="text-center mb-8">
+        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400/20 to-teal-600/20 flex items-center justify-center mx-auto mb-3">
+          <Target className="w-7 h-7 text-emerald-500" />
         </div>
-        <h1 className="text-2xl font-extrabold text-text-primary mb-2">🎯 发音评测</h1>
-        <p className="text-text-secondary text-sm max-w-md mx-auto leading-relaxed">
-          输入标准文本，点击麦克风朗读，AI 对比分析你的发音准确度、流利度、完整度。
+        <h1 className="text-2xl font-extrabold text-text-primary mb-2">🎯 发音评测 Pronunciation Assessment</h1>
+        <p className="text-text-secondary text-sm max-w-lg mx-auto leading-relaxed">
+          输入或随机生成一段英文文本，朗读后 AI 进行多维度发音分析
+        </p>
+        <p className="text-text-light text-xs mt-1 max-w-lg mx-auto">
+          Speak the text aloud — AI analyzes accuracy, stress, intonation, rhythm, and more
         </p>
       </div>
 
-      {/* Input Card */}
-      <div className="bg-white rounded-2xl border border-border p-6 shadow-sm mb-6 animate-fade-in">
-        <label className="text-xs font-semibold text-text-primary mb-2 block">
-          参考文本 Reference Text
-        </label>
+      {/* ═══ 文本输入卡片 ═══ */}
+      <div className="bg-white rounded-2xl border border-border p-5 shadow-sm mb-6">
+        {/* Mode tabs */}
+        <div className="flex items-center gap-1 mb-4 bg-gray-100 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => { setTextMode("manual"); setResult(null); setError(""); speech.reset(); }}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              textMode === "manual" ? "bg-white text-text-primary shadow-sm" : "text-text-light hover:text-text-secondary"
+            }`}
+          >
+            <Pencil className="w-3.5 h-3.5" /> 手动输入
+          </button>
+          <button
+            onClick={() => { setTextMode("random"); handleRandom(); }}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              textMode === "random" ? "bg-white text-text-primary shadow-sm" : "text-text-light hover:text-text-secondary"
+            }`}
+          >
+            <Shuffle className="w-3.5 h-3.5" /> 随机文本
+          </button>
+        </div>
+
+        {/* Length selector (only for random) */}
+        {textMode === "random" && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] text-text-light font-medium">长度:</span>
+            {(["short", "medium", "long"] as const).map((len) => (
+              <button key={len} onClick={() => handleLengthChange(len)}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                  textLength === len
+                    ? "bg-[#5B4FCF] text-white"
+                    : "bg-gray-100 text-text-light hover:bg-gray-200"
+                }`}
+              >
+                {len === "short" ? "短" : len === "medium" ? "中等" : "长"}
+              </button>
+            ))}
+            <button onClick={() => handleRandom()}
+              className="ml-auto px-3 py-1 rounded-full text-[11px] font-medium text-[#5B4FCF] bg-[#5B4FCF]/10 hover:bg-[#5B4FCF]/20 transition-all flex items-center gap-1">
+              <Shuffle className="w-3 h-3" /> 换一条
+            </button>
+          </div>
+        )}
+
+        {/* Text area */}
         <textarea
           value={referenceText}
-          onChange={(e) => setReferenceText(e.target.value)}
-          rows={3}
-          placeholder="Enter the sentence you'll read aloud..."
+          onChange={(e) => { setReferenceText(e.target.value); setResult(null); }}
+          rows={textLength === "long" ? 5 : 3}
+          placeholder="Enter the text you'll read aloud..."
           className="w-full bg-bg-main border border-border rounded-xl px-4 py-3 text-text-primary text-sm
-                     placeholder:text-text-light/60 resize-none focus:outline-none focus:border-primary/40
-                     focus:ring-2 focus:ring-primary/10 transition-all"
+                     placeholder:text-text-light/60 resize-none focus:outline-none focus:border-[#5B4FCF]/40
+                     focus:ring-2 focus:ring-[#5B4FCF]/10 transition-all"
         />
+      </div>
 
-        {/* Speech Recognition Controls */}
-        <div className="flex items-center justify-center gap-4 mt-5">
+      {/* ═══ 录音控制卡片 ═══ */}
+      <div className="bg-white rounded-2xl border border-border p-6 shadow-sm mb-6">
+        <div className="flex items-center justify-center gap-4">
           {!speech.recognizedText && !speech.isListening ? (
             <button onClick={speech.start}
               className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
                          bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-200 hover:scale-105 active:scale-95 transition-all"
             >
-              <Mic className="w-4 h-4" /> 开始朗读
+              <Mic className="w-4 h-4" /> 开始朗读 / Start Speaking
             </button>
           ) : speech.isListening ? (
             <button onClick={speech.stop}
               className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
                          bg-red-500 animate-pulse shadow-red-200 scale-105 transition-all"
             >
-              <MicOff className="w-4 h-4" /> 停止录音
+              <MicOff className="w-4 h-4" /> 停止录音 / Stop
             </button>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
               <button onClick={handleAssess} disabled={assessing}
                 className="flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold text-white
                            bg-gradient-to-r from-emerald-500 to-teal-600 shadow-md shadow-emerald-200
                            hover:scale-105 active:scale-95 disabled:opacity-50 transition-all">
-                {assessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-                {assessing ? "AI 分析中..." : "开始评估"}
+                {assessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                {assessing ? "AI 分析中..." : "开始评估 / Assess"}
               </button>
               <button onClick={resetAll}
                 className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold
                            text-text-secondary bg-white border border-border hover:bg-bg-main transition-colors">
-                <RefreshCw className="w-3.5 h-3.5" /> 重新朗读
+                <RefreshCw className="w-3.5 h-3.5" /> 重新朗读 / Retry
               </button>
             </div>
           )}
         </div>
 
+        {/* Listening status */}
         {speech.isListening && (
-          <div className="mt-3 space-y-1">
-            <p className="text-center text-xs text-red-500 animate-pulse">
-              🎤 正在听... 请朗读上方参考文本
+          <div className="mt-4 space-y-1">
+            <p className="text-center text-xs text-red-500 animate-pulse font-medium">
+              🎤 正在听... 请朗读文本 / Listening... Speak now
             </p>
             {speech.interimText && (
-              <p className="text-center text-xs text-gray-400 italic">
-                {speech.interimText}
-              </p>
+              <p className="text-center text-xs text-gray-400 italic">{speech.interimText}</p>
             )}
           </div>
         )}
+
+        {/* Recognized text */}
         {speech.recognizedText && !speech.isListening && !assessing && !result && (
-          <div className="mt-3 space-y-2">
-            <p className="text-center text-xs text-emerald-600">
-              ✅ 识别完成！点击「开始评估」
+          <div className="mt-4 space-y-2">
+            <p className="text-center text-xs text-emerald-600 font-medium">
+              ✅ 识别完成！点击「开始评估」/ Recognized! Click &quot;Assess&quot;
             </p>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
-              <p className="text-xs font-semibold text-emerald-700 mb-1">🎙️ 识别结果：</p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-emerald-700 mb-1">🎙️ 识别结果 / What you said:</p>
               <p className="text-sm text-emerald-800">{speech.recognizedText}</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Error */}
+      {/* ═══ Error ═══ */}
       {error && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-3 animate-fade-in">
           <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-800 text-sm font-semibold">评估提示</p>
+            <p className="text-amber-800 text-sm font-semibold">评估提示 / Notice</p>
             <p className="text-amber-600 text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Result */}
+      {/* ════════════ 结果展示 ════════════ */}
       {result && (
-        <div className="bg-white rounded-2xl border border-border p-6 shadow-sm animate-fade-in space-y-5">
-          {/* Overall Score */}
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full border-[6px]"
-              style={{ borderColor: getScoreColor(result.overall_score) + "40" }}>
-              <div>
-                <p className="text-3xl font-black" style={{ color: getScoreColor(result.overall_score) }}>
-                  {Math.round(result.overall_score)}
-                </p>
-                <p className="text-[10px] text-text-light -mt-1">综合</p>
+        <div className="space-y-6 animate-fade-in">
+          {/* ─── 综合分数 + 维度评分 ─── */}
+          <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-5">
+              <BarChart3 className="w-4 h-4 text-[#5B4FCF]" /> 评分总览 / Score Overview
+            </h2>
+
+            <div className="grid sm:grid-cols-3 gap-6">
+              {/* Overall ring */}
+              <div className="flex flex-col items-center justify-center">
+                <ScoreRing score={result.overall_score} label="综合分" size={96} />
+              </div>
+
+              {/* Dimension bars */}
+              <div className="sm:col-span-2 space-y-3">
+                <DimBar label="准确度 Accuracy" score={result.accuracy_score} 
+                  icon={<Target className="w-3 h-3" />} color="#6366f1" />
+                <DimBar label="流利度 Fluency" score={result.fluency_score}
+                  icon={<Zap className="w-3 h-3" />} color="#f59e0b" />
+                <DimBar label="完整度 Completeness" score={result.completeness_score}
+                  icon={<CheckCircle2 className="w-3 h-3" />} color="#10b981" />
+                <DimBar label="重音语调 Stress" score={result.stress_score}
+                  icon={<Volume2 className="w-3 h-3" />} color="#ef4444" />
+                <DimBar label="语音语调 Intonation" score={result.intonation_score}
+                  icon={<TrendingUp className="w-3 h-3" />} color="#8b5cf6" />
+                <DimBar label="节奏感 Rhythm" score={result.rhythm_score}
+                  icon={<Zap className="w-3 h-3" />} color="#06b6d4" />
               </div>
             </div>
           </div>
 
-          {/* Score Gauges */}
-          <div className="flex justify-center gap-8">
-            <ScoreGauge label="准确度" score={result.accuracy_score} color={getScoreColor(result.accuracy_score)} />
-            <ScoreGauge label="流利度" score={result.fluency_score} color={getScoreColor(result.fluency_score)} />
-            <ScoreGauge label="完整度" score={result.completeness_score} color={getScoreColor(result.completeness_score)} />
+          {/* ─── AI 分析总结 ─── */}
+          {(result.summary_en || result.summary_cn) && (
+            <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-3">
+                <Lightbulb className="w-4 h-4 text-amber-500" /> AI 分析 / Analysis
+              </h2>
+              {result.summary_en && (
+                <p className="text-text-secondary text-sm leading-relaxed">{result.summary_en}</p>
+              )}
+              {result.summary_cn && (
+                <p className="text-text-light text-xs leading-relaxed mt-2 pt-2 border-t border-border/50">
+                  {result.summary_cn}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ─── 音素突出点 ─── */}
+          {result.phoneme_highlights.length > 0 && (
+            <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-3">
+                <Volume2 className="w-4 h-4 text-blue-500" /> 音素重点 / Phoneme Highlights
+              </h2>
+              <div className="space-y-2">
+                {result.phoneme_highlights.map((h, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <span className="text-blue-500 mt-0.5 shrink-0">🔹</span>
+                    <p className="text-xs text-blue-800 leading-relaxed">{h}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── 逐词分析 ─── */}
+          {result.words.length > 0 && (
+            <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-4">
+                <Pencil className="w-4 h-4 text-[#5B4FCF]" /> 逐词分析 / Word-by-Word Analysis
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {result.words.map((w, i) => (
+                  <WordErrorCard key={i} w={w} />
+                ))}
+              </div>
+              {/* Legend */}
+              <div className="flex justify-center gap-5 mt-4 pt-3 border-t border-border">
+                <span className="flex items-center gap-1.5 text-[10px] text-text-light">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> 正确
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-text-light">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /> 一般
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-text-light">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500" /> 需纠正
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* ─── 学习建议 ─── */}
+          {result.suggestions.length > 0 && (
+            <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
+              <h2 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-3">
+                <Lightbulb className="w-4 h-4 text-amber-500" /> 学习建议 / Suggestions
+              </h2>
+              <ul className="space-y-2">
+                {result.suggestions.map((s, i) => (
+                  <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
+                    <span className="font-bold text-amber-500 mt-0.5 shrink-0">{i + 1}.</span>
+                    <span className="leading-relaxed">{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ─── 跳转到 TTS ─── */}
+          <div className="bg-white rounded-2xl border border-border p-6 shadow-sm text-center">
+            <p className="text-text-secondary text-sm mb-3">
+              想听一下标准的正确发音吗？ / Want to hear the correct pronunciation?
+            </p>
+            <button onClick={goToTTS}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold text-white
+                         bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] shadow-md shadow-indigo-200
+                         hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            >
+              <Volume2 className="w-4 h-4" />
+              听标准发音 / Listen to Correct Pronunciation
+            </button>
           </div>
 
-          {/* Word-level feedback */}
-          <WordList words={result.words} />
-
-          {/* Score Legend */}
-          <div className="flex justify-center gap-4 text-[10px] text-text-light">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> 优秀 ≥85</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> 良好 ≥70</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> 需提升</span>
+          {/* ─── 重新评估 ─── */}
+          <div className="text-center pb-8">
+            <button onClick={resetAll}
+              className="text-sm text-text-light hover:text-[#5B4FCF] transition-colors underline">
+              ← 重新评估 / Try Again
+            </button>
           </div>
         </div>
       )}
