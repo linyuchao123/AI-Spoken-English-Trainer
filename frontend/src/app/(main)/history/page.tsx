@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sessionsApi, Session } from "@/lib/api";
-import { Clock, BarChart3, Zap, ChevronRight, Trash2 } from "lucide-react";
+import { Clock, BarChart3, ChevronRight, Trash2 } from "lucide-react";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -52,12 +52,21 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              onClick={() => router.push(`/history/${session.id}`)}
-              onDelete={(e) => handleDelete(e, session.id)}
-            />
+            <div key={session.id} className="flex items-stretch gap-2 group/row">
+              <SessionCard
+                session={session}
+                onClick={() => router.push(`/history/${session.id}`)}
+              />
+              <button
+                onClick={(e) => handleDelete(e, session.id)}
+                className="shrink-0 w-10 rounded-xl flex items-center justify-center
+                           opacity-0 group-hover/row:opacity-100 transition-all
+                           text-text-light/20 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200"
+                title="删除此会话"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -68,11 +77,9 @@ export default function HistoryPage() {
 function SessionCard({
   session,
   onClick,
-  onDelete,
 }: {
   session: Session;
   onClick: () => void;
-  onDelete: (e: React.MouseEvent) => void;
 }) {
   const statusColor = session.status === "active" ? "text-emerald-500" : "text-text-light";
   const statusText = session.status === "active" ? "进行中" : "已结束";
@@ -81,7 +88,7 @@ function SessionCard({
   return (
     <div
       onClick={onClick}
-      className="relative bg-white rounded-xl border border-border p-4 hover:shadow-lg hover:border-[#5B4FCF]/20 transition-all cursor-pointer group"
+      className="flex-1 bg-white rounded-xl border border-border p-4 hover:shadow-lg hover:border-[#5B4FCF]/20 transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
@@ -107,17 +114,6 @@ function SessionCard({
           <ChevronRight className="w-4 h-4 text-text-light/30 group-hover:text-[#5B4FCF] group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
-
-      {/* Delete button */}
-      <button
-        onClick={onDelete}
-        className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center
-                   opacity-0 group-hover:opacity-100 transition-all
-                   text-text-light/30 hover:text-red-500 hover:bg-red-50"
-        title="删除此会话"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }
