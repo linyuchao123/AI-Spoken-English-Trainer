@@ -3,19 +3,32 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sessionsApi, Session } from "@/lib/api";
-import { Clock, BarChart3, Zap, ChevronRight } from "lucide-react";
+import { Clock, BarChart3, Zap, ChevronRight, Trash2 } from "lucide-react";
 
 export default function HistoryPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchSessions = () => {
     sessionsApi.list(20).then(({ data }) => {
       setSessions(data);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchSessions(); }, []);
+
+  const handleDelete = async (e: React.MouseEvent, sessionId: number) => {
+    e.stopPropagation();
+    if (!confirm("确定要删除这条历史会话吗？此操作不可撤销。")) return;
+    try {
+      await sessionsApi.delete(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (err) {
+      alert("删除失败，请重试");
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-6">
@@ -39,7 +52,12 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (
-            <SessionCard key={session.id} session={session} onClick={() => router.push(`/history/${session.id}`)} />
+            <SessionCard
+              key={session.id}
+              session={session}
+              onClick={() => router.push(`/history/${session.id}`)}
+              onDelete={(e) => handleDelete(e, session.id)}
+            />
           ))}
         </div>
       )}
@@ -47,7 +65,15 @@ export default function HistoryPage() {
   );
 }
 
-function SessionCard({ session, onClick }: { session: Session; onClick: () => void }) {
+function SessionCard({
+  session,
+  onClick,
+  onDelete,
+}: {
+  session: Session;
+  onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
   const statusColor = session.status === "active" ? "text-emerald-500" : "text-text-light";
   const statusText = session.status === "active" ? "进行中" : "已结束";
   const date = session.created_at ? new Date(session.created_at).toLocaleDateString("zh-CN") : "";
@@ -55,7 +81,7 @@ function SessionCard({ session, onClick }: { session: Session; onClick: () => vo
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border border-border p-4 hover:shadow-lg hover:border-[#5B4FCF]/20 transition-all cursor-pointer group"
+      className="relative bg-white rounded-xl border border-border p-4 hover:shadow-lg hover:border-[#5B4FCF]/20 transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
@@ -81,6 +107,17 @@ function SessionCard({ session, onClick }: { session: Session; onClick: () => vo
           <ChevronRight className="w-4 h-4 text-text-light/30 group-hover:text-[#5B4FCF] group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
+
+      {/* Delete button */}
+      <button
+        onClick={onDelete}
+        className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center
+                   opacity-0 group-hover:opacity-100 transition-all
+                   text-text-light/30 hover:text-red-500 hover:bg-red-50"
+        title="删除此会话"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

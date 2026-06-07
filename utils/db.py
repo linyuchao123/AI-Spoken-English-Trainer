@@ -268,6 +268,18 @@ def get_user_sessions(user_id: int, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def delete_session(session_id: int) -> bool:
+    """Delete a session and all related data (messages, scores, corrections).
+    Returns True if deleted, False if session not found."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+
 # ============================================================
 # Message Operations
 # ============================================================

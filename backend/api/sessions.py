@@ -30,6 +30,7 @@ from utils.db import (
     get_session_scores,
     get_session_corrections,
     add_message,
+    delete_session,
 )
 from config.settings import SCENES
 from modules.llm import generate_reply, generate_opening
@@ -132,6 +133,16 @@ async def end_current_session(session_id: int, request: Request):
     end_session(session_id)
     session = get_session(session_id)
     return _session_to_response(session)
+
+
+@router.delete("/{session_id}")
+async def delete_one_session(session_id: int, request: Request):
+    """Delete a session and all related data."""
+    require_auth(request)
+
+    if not delete_session(session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return {"ok": True}
 
 
 @router.get("/{session_id}/messages", response_model=list[MessageResponse])

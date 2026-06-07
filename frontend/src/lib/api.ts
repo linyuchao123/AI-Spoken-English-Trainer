@@ -156,6 +156,9 @@ export const sessionsApi = {
 
   getDetail: (sessionId: number) =>
     api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),
+
+  delete: (sessionId: number) =>
+    api.delete<{ ok: boolean }>(`/api/sessions/${sessionId}`),
 };
 
 // ============================================================
