@@ -597,20 +597,20 @@ export default function PracticePage() {
       </div>
 
       {/* ── Session Header ── */}
-      <div className="relative z-10 flex items-center gap-4 px-6 py-3 shrink-0
+      <div className="relative z-10 flex items-center gap-2 md:gap-4 px-3 md:px-6 py-2 md:py-3 shrink-0
                       bg-gradient-to-r from-[#1A1D28]/90 to-[#232738]/90 backdrop-blur-md
                       border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5B4FCF]/30 to-[#9B8FFF]/20
-                          border border-[#5B4FCF]/20 flex items-center justify-center shadow-lg">
-            <span className="text-xl">{scene?.icon || "💬"}</span>
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-[#5B4FCF]/30 to-[#9B8FFF]/20
+                          border border-[#5B4FCF]/20 flex items-center justify-center shadow-lg shrink-0">
+            <span className="text-base md:text-xl">{scene?.icon || "💬"}</span>
           </div>
-          <div>
-            <h3 className="text-white text-sm font-bold leading-tight">
+          <div className="min-w-0">
+            <h3 className="text-white text-xs md:text-sm font-bold leading-tight truncate">
               {scene?.name || "Practice"}
               <span className="text-white/40 font-normal"> · {difficulty?.name || ""}</span>
             </h3>
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <p className="text-white/35 text-[11px] leading-tight">
                 {scene?.description || ""}
               </p>
@@ -624,36 +624,36 @@ export default function PracticePage() {
         </div>
 
         {/* Round counter + Live indicator */}
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/8">
+        <div className="ml-auto flex items-center gap-1.5 md:gap-3 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/8">
             <MessageSquare className="w-3.5 h-3.5 text-[#9B8FFF]" />
-            <span className="text-white/60 text-xs font-medium">{roundCount} 轮对话</span>
+            <span className="text-white/60 text-xs font-medium">{roundCount} 轮</span>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
-            <span className="relative flex h-2 w-2">
+          <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+            <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-emerald-400" />
             </span>
-            <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider">Live</span>
+            <span className="text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Live</span>
           </div>
 
           {/* End Session Button */}
           <button
             onClick={handleEndSession}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl
+            className="flex items-center gap-1 md:gap-1.5 px-2.5 md:px-4 py-1 md:py-1.5 rounded-xl
                        bg-red-500/10 border border-red-500/20 text-red-400
                        hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-300
-                       text-xs font-semibold transition-all duration-200"
+                       text-[10px] md:text-xs font-semibold transition-all duration-200"
           >
-            <StopCircle className="w-3.5 h-3.5" />
-            结束会话
+            <StopCircle className="w-3 h-3 md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">结束会话</span>
           </button>
         </div>
       </div>
 
       {/* ── Chat Area ── */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-5 space-y-5">
+      <div className="relative z-10 flex-1 overflow-y-auto px-3 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5">
         {messages.length === 0 && !sending && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center animate-fade-in">
@@ -709,7 +709,7 @@ export default function PracticePage() {
       </div>
 
       {/* ── Input Area ── */}
-      <div className="relative z-10 shrink-0 px-6 pb-5 pt-3
+      <div className="relative z-10 shrink-0 px-3 md:px-6 pb-3 md:pb-5 pt-2 md:pt-3
                       bg-gradient-to-t from-[#1A1D28]/95 via-[#1A1D28]/80 to-transparent
                       backdrop-blur-sm">
         {/* Send error with retry */}
@@ -749,7 +749,7 @@ export default function PracticePage() {
           </div>
         )}
 
-        <div className="flex items-end gap-3 max-w-3xl mx-auto">
+        <div className="flex items-end gap-2 md:gap-3 max-w-3xl mx-auto">
           {/* Mic Button */}
           {speech.isSupported ? (
             <button
@@ -821,7 +821,7 @@ export default function PracticePage() {
         </div>
 
         {/* Hint text */}
-        <p className="text-center text-[10px] text-white/25 mt-2.5 max-w-3xl mx-auto">
+        <p className="text-center text-[10px] text-white/25 mt-2 max-w-3xl mx-auto hidden md:block">
           {speech.error
             ? `⚠️ 语音错误: ${speech.error} — 请重试或手动输入`
             : speech.isListening
