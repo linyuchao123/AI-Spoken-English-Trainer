@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "evaluation": "./modules/agents/evaluation_graph.py:_get_graph",
+    "realtime_feedback": "./modules/agents/realtime_feedback_graph.py:_get_graph"
+  },
+  "env": ".env"
+}

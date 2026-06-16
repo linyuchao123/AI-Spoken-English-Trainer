@@ -21,7 +21,12 @@ from backend.models.schemas import (
     DetailPronunciation,
     DetailGrammar,
     WordScoreResponse,
+    PronunciationResponse,
     EvaluationResponse,
+    RealtimeFeedbackResponse,
+    RealtimeGrammarError,
+    RealtimeExpressionSuggestion,
+    SendMessageResponse,
 )
 from utils.db import (
     create_session,
@@ -35,13 +40,14 @@ from utils.db import (
     get_session_evaluation,
     get_connection,
     add_message,
+    add_pronunciation_score,
     delete_session,
     save_session_evaluation,
 )
 from config.settings import SCENES
 from modules.llm import generate_reply, generate_opening
 from modules.evaluation import evaluate_session
-from modules.agents import run_evaluation_pipeline
+from modules.agents import run_evaluation_pipeline, run_realtime_feedback
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -53,6 +59,7 @@ def _session_to_response(s: dict) -> SessionResponse:
         scene_name=s["scene_name"],
         difficulty=s["difficulty"],
         model=s["model"],
+        training_mode=s.get("training_mode", "immersive"),
         status=s["status"],
         total_rounds=s["total_rounds"],
         avg_pronunciation_score=s["avg_pronunciation_score"],
@@ -81,6 +88,7 @@ async def create_new_session(req: CreateSessionRequest, request: Request):
         scene_name=scene["name"],
         difficulty=req.difficulty,
         model=req.model,
+        training_mode=req.training_mode,
         user_id=user_id,
     )
 
@@ -292,9 +300,16 @@ async def get_messages(session_id: int, request: Request):
     ]
 
 
-@router.post("/{session_id}/messages", response_model=list[MessageResponse])
+@router.post("/{session_id}/messages", response_model=SendMessageResponse)
 async def send_message(session_id: int, req: SendMessageRequest, request: Request):
-    """Send a user message and get an AI reply via the LLM conversation engine."""
+    """Send a user message and get an AI reply via the LLM conversation engine.
+
+    In 'realtime' training mode, also runs per-message grammar/expression
+    analysis and returns real-time feedback alongside the messages.
+
+    When audio_base64 is provided, also runs Chivox MCP phoneme-level
+    pronunciation assessment concurrently with AI reply generation.
+    """
     user = require_auth(request)
 
     session = get_session(session_id)
@@ -304,7 +319,20 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
         raise HTTPException(status_code=400, detail="Session is not active.")
 
     # 1. Persist user message
-    add_message(session_id, "user", req.content)
+    user_msg_id = add_message(session_id, "user", req.content)
+
+    # 1.5 ── Pronunciation Assessment (Chivox MCP, runs concurrently with LLM) ──
+    pron_task = None
+    if req.audio_base64 and req.audio_base64.strip():
+        pron_task = asyncio.create_task(
+            asyncio.to_thread(
+                _run_pronunciation_assessment,
+                audio_base64=req.audio_base64,
+                reference_text=req.content,
+                session_id=session_id,
+                message_id=user_msg_id,
+            )
+        )
 
     # 2. Build conversation history (last 20 messages for context)
     all_messages = get_session_messages(session_id)
@@ -332,17 +360,169 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     # 4. Persist AI response
     add_message(session_id, "ai", ai_response)
 
-    # 5. Return full message list
+    # 4.5 ── Collect pronunciation result (awaited after AI reply to maximise concurrency) ──
+    pronunciation: Optional[PronunciationResponse] = None
+    if pron_task is not None:
+        try:
+            pronunciation = await pron_task
+        except Exception as exc:
+            logger.warning("[send_message] Pronunciation assessment failed: %s", exc)
+            pronunciation = None
+
+    # 5. ── Real-time feedback (realtime mode only) ──────────────────
+    feedback: Optional[RealtimeFeedbackResponse] = None
+    training_mode = session.get("training_mode", "immersive")
+
+    if training_mode == "realtime":
+        from modules.agents.realtime_feedback_graph import RealtimeFeedbackOutput
+        try:
+            rt_result: RealtimeFeedbackOutput = await asyncio.to_thread(
+                run_realtime_feedback,
+                user_message=req.content,
+                difficulty=session["difficulty"],
+            )
+            feedback = RealtimeFeedbackResponse(
+                has_errors=rt_result.has_errors,
+                overall_score=rt_result.overall_score,
+                corrected_sentence=rt_result.corrected_sentence,
+                grammar_errors=[
+                    RealtimeGrammarError(
+                        original_text=e.original_text,
+                        corrected_text=e.corrected_text,
+                        error_type=e.error_type,
+                        explanation=e.explanation,
+                        explanation_cn=e.explanation_cn,
+                    )
+                    for e in rt_result.grammar_errors
+                ],
+                expression_suggestions=[
+                    RealtimeExpressionSuggestion(
+                        original_phrase=s.original_phrase,
+                        improved_phrase=s.improved_phrase,
+                        explanation=s.explanation,
+                        explanation_cn=s.explanation_cn,
+                    )
+                    for s in rt_result.expression_suggestions
+                ],
+                summary_cn=rt_result.summary_cn,
+            )
+            logger.info(
+                "[send_message] Real-time feedback: score=%.0f, errors=%d, suggestions=%d",
+                rt_result.overall_score,
+                len(rt_result.grammar_errors),
+                len(rt_result.expression_suggestions),
+            )
+        except Exception as exc:
+            logger.warning("[send_message] Real-time feedback failed: %s", exc)
+            # Feedback failure is non-fatal — return messages without feedback
+            feedback = None
+
+    # 6. Return full message list + optional feedback + pronunciation
     messages = get_session_messages(session_id)
-    return [
-        MessageResponse(
-            id=m["id"],
-            role=m["role"],
-            content=m["content"],
-            created_at=str(m["created_at"]) if m.get("created_at") else None,
+    return SendMessageResponse(
+        messages=[
+            MessageResponse(
+                id=m["id"],
+                role=m["role"],
+                content=m["content"],
+                created_at=str(m["created_at"]) if m.get("created_at") else None,
+            )
+            for m in messages
+        ],
+        feedback=feedback,
+        pronunciation=pronunciation,
+    )
+
+
+def _run_pronunciation_assessment(
+    audio_base64: str,
+    reference_text: str,
+    session_id: int,
+    message_id: int,
+):
+    """Run Chivox MCP pronunciation assessment and save to DB.
+
+    Called in a background thread via asyncio.to_thread().
+    Chivox is the primary engine; falls back to LLM text comparison
+    if Chivox is unavailable or returns an error.
+
+    Returns:
+        PronunciationResponse or None on failure
+    """
+    from modules.pronunciation import assess_audio
+
+    result = assess_audio(
+        audio_base64=audio_base64,
+        reference_text=reference_text,
+        recognized_text=reference_text,
+        accent="en-US",
+    )
+
+    if result.error and not result.overall_score:
+        logger.warning(
+            "[pronunciation] Assessment returned error (no score): %s", result.error
         )
-        for m in messages
-    ]
+        return None
+
+    # Save to database
+    try:
+        error_details = {
+            "words": [
+                {
+                    "word": w.word,
+                    "accuracy_score": round(w.accuracy_score, 1),
+                    "error_type": w.error_type,
+                    "expected_pronunciation": w.expected_pronunciation,
+                    "correction_cn": w.correction_cn,
+                }
+                for w in result.words
+            ],
+            "phoneme_highlights": result.phoneme_highlights,
+            "stress_score": round(result.stress_score, 1),
+            "intonation_score": round(result.intonation_score, 1),
+            "rhythm_score": round(result.rhythm_score, 1),
+        }
+        add_pronunciation_score(
+            session_id=session_id,
+            message_id=message_id,
+            overall_score=round(result.overall_score, 1),
+            accuracy_score=round(result.accuracy_score, 1),
+            fluency_score=round(result.fluency_score, 1),
+            completeness_score=round(result.completeness_score, 1),
+            error_details=error_details,
+        )
+        logger.info(
+            "[pronunciation] Saved Chivox score: overall=%.0f, msg=%d",
+            result.overall_score, message_id,
+        )
+    except Exception as exc:
+        logger.warning("[pronunciation] DB save failed: %s", exc)
+
+    # Build Pydantic response
+    return PronunciationResponse(
+        accuracy_score=round(result.accuracy_score, 1),
+        fluency_score=round(result.fluency_score, 1),
+        completeness_score=round(result.completeness_score, 1),
+        overall_score=round(result.overall_score, 1),
+        stress_score=round(result.stress_score, 1),
+        intonation_score=round(result.intonation_score, 1),
+        rhythm_score=round(result.rhythm_score, 1),
+        words=[
+            WordScoreResponse(
+                word=w.word,
+                accuracy_score=round(w.accuracy_score, 1),
+                error_type=w.error_type,
+                expected_pronunciation=w.expected_pronunciation,
+                correction_cn=w.correction_cn,
+            )
+            for w in result.words
+        ],
+        phoneme_highlights=result.phoneme_highlights,
+        summary_en=result.summary_en,
+        summary_cn=result.summary_cn,
+        suggestions=result.suggestions,
+        error=result.error,
+    )
 
 
 # ============================================================

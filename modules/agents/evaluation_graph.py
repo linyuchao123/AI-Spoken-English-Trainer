@@ -223,7 +223,7 @@ def grammar_analyst_node(state: EvaluationState) -> dict:
     ])
 
     llm = get_fallback_model(temperature=0.2, max_tokens=3000)
-    structured_llm = llm.with_structured_output(GrammarAnalysisOutput)
+    structured_llm = llm.with_structured_output(GrammarAnalysisOutput, method="function_calling")
 
     chain = prompt | structured_llm
     result: GrammarAnalysisOutput = chain.invoke({
@@ -314,7 +314,7 @@ def pronunciation_analyst_node(state: EvaluationState) -> dict:
     ])
 
     llm = get_fallback_model(temperature=0.2, max_tokens=2000)
-    structured_llm = llm.with_structured_output(PronunciationAnalysisOutput)
+    structured_llm = llm.with_structured_output(PronunciationAnalysisOutput, method="function_calling")
 
     chain = prompt | structured_llm
     result: PronunciationAnalysisOutput = chain.invoke({
@@ -383,7 +383,7 @@ def comprehensive_evaluator_node(state: EvaluationState) -> dict:
     ])
 
     llm = get_fallback_model(temperature=0.3, max_tokens=2000)
-    structured_llm = llm.with_structured_output(EvaluationScoresOutput)
+    structured_llm = llm.with_structured_output(EvaluationScoresOutput, method="function_calling")
 
     chain = prompt | structured_llm
     result: EvaluationScoresOutput = chain.invoke({
@@ -458,7 +458,7 @@ def report_generator_node(state: EvaluationState) -> dict:
     ])
 
     llm = get_fallback_model(temperature=0.3, max_tokens=4000)
-    structured_llm = llm.with_structured_output(ReportOutput)
+    structured_llm = llm.with_structured_output(ReportOutput, method="function_calling")
 
     chain = prompt | structured_llm
     result: ReportOutput = chain.invoke({

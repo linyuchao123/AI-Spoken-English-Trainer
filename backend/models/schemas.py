@@ -72,6 +72,7 @@ class CreateSessionRequest(BaseModel):
     scene_key: str
     difficulty: str
     model: str = "openai"
+    training_mode: str = "immersive"  # "immersive" or "realtime"
 
 
 class SessionResponse(BaseModel):
@@ -80,6 +81,7 @@ class SessionResponse(BaseModel):
     scene_name: str
     difficulty: str
     model: str
+    training_mode: str = "immersive"  # "immersive" or "realtime"
     status: str
     total_rounds: int = 0
     avg_pronunciation_score: float = 0.0
@@ -93,6 +95,7 @@ class SessionResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1)
+    audio_base64: str = Field(default="", description="Optional: base64-encoded audio for Chivox pronunciation assessment")
 
 
 class MessageResponse(BaseModel):
@@ -311,3 +314,43 @@ class EvaluationResponse(BaseModel):
     strengths: list[str] = []
     weaknesses: list[str] = []
     suggestions: list[str] = []
+
+
+# ============================================================
+# Real-time Feedback Schemas (per-message analysis)
+# ============================================================
+
+class RealtimeGrammarError(BaseModel):
+    """A single grammar/vocabulary error found in real-time."""
+    original_text: str = Field(description="The incorrect word or phrase")
+    corrected_text: str = Field(description="The corrected version")
+    error_type: str = Field(default="", description="e.g. tense, article, preposition")
+    explanation: str = Field(default="", description="English explanation")
+    explanation_cn: str = Field(default="", description="Chinese explanation")
+
+
+class RealtimeExpressionSuggestion(BaseModel):
+    """A better/more natural way to express an idea."""
+    original_phrase: str = ""
+    improved_phrase: str = ""
+    explanation: str = ""
+    explanation_cn: str = ""
+
+
+class RealtimeFeedbackResponse(BaseModel):
+    """Real-time per-message feedback returned alongside the AI reply."""
+    has_errors: bool = False
+    overall_score: float = Field(ge=0, le=100, default=75,
+                                  description="Overall score for this sentence (0-100)")
+    corrected_sentence: str = Field(default="",
+                                     description="Fully corrected version of the user sentence")
+    grammar_errors: list[RealtimeGrammarError] = Field(default_factory=list)
+    expression_suggestions: list[RealtimeExpressionSuggestion] = Field(default_factory=list)
+    summary_cn: str = Field(default="", description="One-sentence Chinese summary of feedback")
+
+
+class SendMessageResponse(BaseModel):
+    """Wrapper for send_message that may include real-time feedback."""
+    messages: list[MessageResponse]
+    feedback: Optional[RealtimeFeedbackResponse] = None
+    pronunciation: Optional[PronunciationResponse] = None

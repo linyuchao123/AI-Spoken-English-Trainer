@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { sessionsApi, Message, ttsApi } from "@/lib/api";
+import { sessionsApi, Message, ttsApi, RealtimeFeedback, PronunciationResult } from "@/lib/api";
 import {
   Mic, Send, MicOff, Sparkles, Volume2, Bot, User,
   MessageSquare, StopCircle, Globe, ChevronDown, ChevronUp,
   Languages, RefreshCw, AlertCircle, ImageOff, CheckCircle2, Play,
+  BarChart3, Target, Zap,
 } from "lucide-react";
+import { useAudioRecorder } from "../pronunciation/useAudioRecorder";
 
 /* ──────────── Scene background helper ──────────── */
 function getSceneBg(sceneKey: string, difficulty: string): string {
@@ -151,11 +154,200 @@ function RecordingWaveform({ volume, isListening }: { volume: number; isListenin
 }
 
 /* ══════════════════════════════════════════════════════════════
+   Score Ring Component (circular score display)
+   ══════════════════════════════════════════════════════════════ */
+function ScoreRing({ score, size = 56 }: { score: number; size?: number }) {
+  const radius = (size - 6) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.min(100, Math.max(0, score)) / 100;
+  const offset = circumference * (1 - progress);
+  const color =
+    score >= 90 ? "#22c55e" :
+    score >= 75 ? "#3b82f6" :
+    score >= 60 ? "#f59e0b" :
+    score >= 40 ? "#f97316" : "#ef4444";
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none"
+          stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none"
+          stroke={color} strokeWidth="4" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          className="transition-all duration-700 ease-out" />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xs font-bold" style={{ color }}>
+          {Math.round(score)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Realtime Feedback Card (shown below user messages)
+   ══════════════════════════════════════════════════════════════ */
+function FeedbackCard({ feedback }: { feedback: RealtimeFeedback }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mt-2 ml-0 animate-fade-in">
+      {/* Compact summary bar */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl
+                   bg-indigo-500/10 border border-indigo-500/20
+                   hover:bg-indigo-500/15 transition-all w-full text-left"
+      >
+        <ScoreRing score={feedback.overall_score} size={36} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-white/70 font-medium truncate">
+            {feedback.summary_cn || "评分完成"}
+          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {feedback.grammar_errors.length > 0 && (
+              <span className="text-[10px] text-amber-400/80">
+                {feedback.grammar_errors.length} 个语法问题
+              </span>
+            )}
+            {feedback.expression_suggestions.length > 0 && (
+              <span className="text-[10px] text-emerald-400/80">
+                {feedback.expression_suggestions.length} 个表达建议
+              </span>
+            )}
+            {!feedback.has_errors && (
+              <span className="text-[10px] text-emerald-400">👍 很棒!</span>
+            )}
+          </div>
+        </div>
+        {expanded ?
+          <ChevronUp className="w-3.5 h-3.5 text-white/40 shrink-0" /> :
+          <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" />
+        }
+      </button>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="mt-2 space-y-2 animate-fade-in">
+          {/* Corrected sentence */}
+          {feedback.corrected_sentence && feedback.corrected_sentence !== feedback.grammar_errors[0]?.original_text && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-500/8 border border-emerald-500/15">
+              <p className="text-[10px] text-emerald-400/70 mb-0.5">✅ 修正后</p>
+              <p className="text-xs text-white/80">{feedback.corrected_sentence}</p>
+            </div>
+          )}
+
+          {/* Grammar errors */}
+          {feedback.grammar_errors.map((err, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/15">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-medium">
+                  {err.error_type || "语法"}
+                </span>
+              </div>
+              <p className="text-xs text-white/70">
+                <span className="line-through text-red-400/80">{err.original_text}</span>
+                {" → "}
+                <span className="text-emerald-400">{err.corrected_text}</span>
+              </p>
+              {err.explanation && (
+                <p className="text-[11px] text-white/50 mt-1">{err.explanation}</p>
+              )}
+              {err.explanation_cn && (
+                <p className="text-[11px] text-white/35 mt-0.5">{err.explanation_cn}</p>
+              )}
+            </div>
+          ))}
+
+          {/* Expression suggestions */}
+          {feedback.expression_suggestions.map((sug, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg bg-emerald-500/8 border border-emerald-500/15">
+              <p className="text-[10px] text-emerald-400/70 mb-0.5">💡 地道表达</p>
+              <p className="text-xs text-white/70">
+                <span className="text-white/50">{sug.original_phrase}</span>
+                {" → "}
+                <span className="text-emerald-400">{sug.improved_phrase}</span>
+              </p>
+              {sug.explanation && (
+                <p className="text-[11px] text-white/50 mt-1">{sug.explanation}</p>
+              )}
+              {sug.explanation_cn && (
+                <p className="text-[11px] text-white/35 mt-0.5">{sug.explanation_cn}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Pronunciation Mini Card (Chivox score summary below user msgs)
+   ══════════════════════════════════════════════════════════════ */
+function PronunciationMiniCard({ pronunciation }: { pronunciation: PronunciationResult }) {
+  const score = pronunciation.overall_score;
+  const color =
+    score >= 85 ? "#10b981" :
+    score >= 70 ? "#f59e0b" :
+    score >= 50 ? "#f97316" : "#ef4444";
+  const grade =
+    score >= 90 ? "Excellent" :
+    score >= 80 ? "Very Good" :
+    score >= 70 ? "Good" :
+    score >= 60 ? "Fair" : "Needs Improvement";
+
+  return (
+    <div className="mt-2 animate-fade-in">
+      <div className="px-3 py-2 rounded-xl bg-sky-500/8 border border-sky-500/15">
+        <div className="flex items-center gap-2.5">
+          {/* Mini score ring */}
+          <div className="relative w-10 h-10 shrink-0">
+            <svg width="40" height="40" className="-rotate-90">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
+              <circle cx="20" cy="20" r="16" fill="none" stroke={color} strokeWidth="3"
+                strokeLinecap="round" strokeDasharray={2 * Math.PI * 16}
+                strokeDashoffset={2 * Math.PI * 16 * (1 - Math.min(100, Math.max(0, score)) / 100)}
+                className="transition-all duration-700 ease-out" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[10px] font-bold" style={{ color }}>{Math.round(score)}</span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Target className="w-3 h-3 text-sky-400" />
+              <span className="text-xs text-sky-300 font-semibold">发音评分 · {grade}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-white/50">准确度 {Math.round(pronunciation.accuracy_score)}</span>
+              <span className="text-[10px] text-white/30">·</span>
+              <span className="text-[10px] text-white/50">流利度 {Math.round(pronunciation.fluency_score)}</span>
+              <span className="text-[10px] text-white/30">·</span>
+              <span className="text-[10px] text-white/50">完整度 {Math.round(pronunciation.completeness_score)}</span>
+            </div>
+            {pronunciation.phoneme_highlights.length > 0 && (
+              <p className="text-[10px] text-amber-400/70 mt-1 line-clamp-1">
+                ⚠ {pronunciation.phoneme_highlights[0]}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    Chat Bubble Component
    ══════════════════════════════════════════════════════════════ */
 function ChatBubble({
   message, isSpeaking, isAutoPlaying, onReplay,
   userInitial, translationCn, showTranslation, onToggleTranslation,
+  feedback, pronunciation,
 }: {
   message: Message & { translation_cn?: string };
   isSpeaking: boolean;
@@ -165,6 +357,8 @@ function ChatBubble({
   translationCn?: string;
   showTranslation?: boolean;
   onToggleTranslation?: (id: number) => void;
+  feedback?: RealtimeFeedback | null;
+  pronunciation?: PronunciationResult | null;
 }) {
   const isUser = message.role === "user";
 
@@ -177,6 +371,12 @@ function ChatBubble({
                           shadow-lg shadow-indigo-500/20">
             {message.content}
           </div>
+          {/* Real-time feedback card */}
+          {feedback && <FeedbackCard feedback={feedback} />}
+          {/* Pronunciation score (Chivox/audio-based) */}
+          {pronunciation && !pronunciation.error && (
+            <PronunciationMiniCard pronunciation={pronunciation} />
+          )}
           <p className="text-right text-[10px] text-white/25 mt-1 mr-1">
             {formatTimestamp(message.created_at)}
           </p>
@@ -270,7 +470,8 @@ function ChatBubble({
    No Session View — Step-by-step onboarding
    ══════════════════════════════════════════════════════════════ */
 function NoSessionView() {
-  const { scenes, difficulties, models, currentScene, currentDifficulty, currentModel } = useAppStore();
+  const { scenes, difficulties, models, currentScene, currentDifficulty, currentModel,
+          currentTrainingMode, setCurrentTrainingMode, createSession } = useAppStore();
   const currentSceneData = scenes.find((s) => s.key === currentScene);
   const currentModelData = models.find((m) => m.key === currentModel);
   const currentDifficultyData = difficulties.find((d) => d.key === currentDifficulty);
@@ -290,12 +491,9 @@ function NoSessionView() {
       active: true },
   ];
 
-  const handleQuickStart = () => {
-    // Create session directly from NoSessionView
-    const { createSession } = useAppStore.getState();
-    createSession();
-    // The store handles the redirect via the pathname
-    window.location.href = "/practice";
+  const handleQuickStart = async () => {
+    await createSession();
+    // activeSession will be set in the store → component re-renders to chat view
   };
 
   return (
@@ -361,6 +559,49 @@ function NoSessionView() {
           </div>
         </div>
 
+        {/* Training Mode Selector */}
+        <div className="mb-6">
+          <p className="text-xs text-text-secondary mb-3 font-medium">选择训练模式</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setCurrentTrainingMode("immersive")}
+              className={`px-4 py-3 rounded-2xl border text-left transition-all duration-200 ${
+                currentTrainingMode === "immersive"
+                  ? "border-[#5B4FCF]/50 bg-[#5B4FCF]/10 shadow-lg shadow-indigo-500/10"
+                  : "border-border/60 bg-white hover:border-[#5B4FCF]/20"
+              }`}
+            >
+              <p className="text-sm font-bold text-text-primary">🎯 沉浸式练习</p>
+              <p className="text-[10px] text-text-light mt-0.5 leading-relaxed">
+                对话不打断，结束后统一评估
+              </p>
+              {currentTrainingMode === "immersive" && (
+                <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-[#5B4FCF] text-white font-medium">
+                  当前选择
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setCurrentTrainingMode("realtime")}
+              className={`px-4 py-3 rounded-2xl border text-left transition-all duration-200 ${
+                currentTrainingMode === "realtime"
+                  ? "border-emerald-500/50 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                  : "border-border/60 bg-white hover:border-emerald-500/20"
+              }`}
+            >
+              <p className="text-sm font-bold text-text-primary">⚡ 实时练习</p>
+              <p className="text-[10px] text-text-light mt-0.5 leading-relaxed">
+                每轮对话后立即纠错+打分
+              </p>
+              {currentTrainingMode === "realtime" && (
+                <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-white font-medium">
+                  当前选择
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
         {/* CTA */}
         <div className="text-center mb-6">
           <p className="text-text-secondary text-sm mb-4 leading-relaxed">
@@ -397,6 +638,7 @@ function NoSessionView() {
 export default function PracticePage() {
   const { scenes, difficulties, models, activeSession, endSession } = useAppStore();
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
   const [messages, setMessages] = useState<(Message & { translation_cn?: string })[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -407,8 +649,12 @@ export default function PracticePage() {
   const [autoPlayingId, setAutoPlayingId] = useState<number | null>(null);
   const [bgError, setBgError] = useState(false);
   const [expandedTranslations, setExpandedTranslations] = useState<Set<number>>(new Set());
+  const [feedbackMap, setFeedbackMap] = useState<Record<number, RealtimeFeedback>>({});
+  const [pronunciationMap, setPronunciationMap] = useState<Record<number, PronunciationResult>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const speech = useSpeechRecognition();
+  const audio = useAudioRecorder();
+  const audioBase64Ref = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scene = scenes.find((s) => s.key === activeSession?.scene_key);
@@ -421,13 +667,34 @@ export default function PracticePage() {
   // Sync speech transcript to input
   useEffect(() => { if (speech.transcript) setInput(speech.transcript); }, [speech.transcript]);
 
+  // Keep audioBase64 ref in sync with audio recorder state
+  useEffect(() => {
+    audioBase64Ref.current = audio.audioBase64;
+  }, [audio.audioBase64]);
+
+  // When audio recording completes and we have pending text, auto-send
+  const pendingSendRef = useRef<string>("");
+  useEffect(() => {
+    if (audio.audioBase64 && !audio.isRecording && pendingSendRef.current) {
+      const text = pendingSendRef.current;
+      pendingSendRef.current = "";
+      handleSendWithText(text);
+    }
+  }, [audio.audioBase64, audio.isRecording]);
+
   // Auto-send when speech stops and has content
   useEffect(() => {
     if (!speech.isListening && speech.transcript.trim() && activeSession) {
-      const timer = setTimeout(() => {
-        handleSendWithText(speech.transcript.trim());
-      }, 400);
-      return () => clearTimeout(timer);
+      pendingSendRef.current = speech.transcript.trim();
+      // If audio wasn't recording (text-only mode), send after short delay
+      if (!audio.isRecording && !audio.audioBase64) {
+        const text = pendingSendRef.current;
+        pendingSendRef.current = "";
+        const timer = setTimeout(() => {
+          handleSendWithText(text);
+        }, 300);
+        return () => clearTimeout(timer);
+      }
     }
   }, [speech.isListening]);
 
@@ -438,6 +705,8 @@ export default function PracticePage() {
         setMessages(data);
         setAutoPlayedIds(new Set());
         setExpandedTranslations(new Set());
+        setFeedbackMap({});
+        setPronunciationMap({});
         setBgError(false);
       }).catch(() => setMessages([]));
     } else {
@@ -490,9 +759,40 @@ export default function PracticePage() {
     setFailedText("");
     setSendError("");
     setSending(true);
+
+    // Capture current audio base64 (from ref, which is synced with state)
+    const audioB64 = audioBase64Ref.current || undefined;
+
     try {
-      const { data } = await sessionsApi.sendMessage(activeSession.id, t);
-      setMessages(data);
+      const { data } = await sessionsApi.sendMessage(activeSession.id, t, audioB64);
+      const msgs = data.messages || [];
+      setMessages(msgs.map((m) => ({ ...m })));
+
+      // Store real-time feedback if present
+      if (data.feedback) {
+        // Associate feedback with the latest user message
+        const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user");
+        if (lastUserMsg) {
+          setFeedbackMap((prev) => ({
+            ...prev,
+            [lastUserMsg.id]: data.feedback!,
+          }));
+        }
+      }
+
+      // Store pronunciation result if present
+      if (data.pronunciation) {
+        const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user");
+        if (lastUserMsg) {
+          setPronunciationMap((prev) => ({
+            ...prev,
+            [lastUserMsg.id]: data.pronunciation!,
+          }));
+        }
+      }
+
+      // Reset audio after successful send
+      audio.reset();
     } catch (err: any) {
       const errMsg = err?.response?.data?.detail || "消息发送失败，请重试";
       setSendError(errMsg);
@@ -543,13 +843,16 @@ export default function PracticePage() {
     });
   };
 
+  // Audio ref for cleanup (must be declared before handlers that use it)
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const handleEndSession = async () => {
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
     }
     await endSession();
-    window.location.href = "/history";
+    router.push("/history");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -558,9 +861,6 @@ export default function PracticePage() {
       handleSend();
     }
   };
-
-  // Audio ref for cleanup
-  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   if (!activeSession) return <NoSessionView />;
 
@@ -682,6 +982,8 @@ export default function PracticePage() {
             translationCn={msg.translation_cn}
             showTranslation={expandedTranslations.has(msg.id)}
             onToggleTranslation={handleToggleTranslation}
+            feedback={msg.role === "user" ? feedbackMap[msg.id] || null : null}
+            pronunciation={msg.role === "user" ? pronunciationMap[msg.id] || null : null}
           />
         ))}
 
@@ -753,7 +1055,10 @@ export default function PracticePage() {
           {/* Mic Button */}
           {speech.isSupported ? (
             <button
-              onClick={speech.isListening ? speech.stop : speech.start}
+              onClick={speech.isListening
+                ? () => { speech.stop(); audio.stop(); }
+                : () => { speech.start(); audio.start().catch(() => {}); }
+              }
               disabled={sending}
               className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white
                           shadow-lg transition-all duration-300 shrink-0 ${

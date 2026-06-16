@@ -75,6 +75,40 @@ export const scenesApi = {
 };
 
 // ============================================================
+// Real-time Feedback Types
+// ============================================================
+
+export interface RealtimeGrammarError {
+  original_text: string;
+  corrected_text: string;
+  error_type: string;
+  explanation: string;
+  explanation_cn: string;
+}
+
+export interface RealtimeExpressionSuggestion {
+  original_phrase: string;
+  improved_phrase: string;
+  explanation: string;
+  explanation_cn: string;
+}
+
+export interface RealtimeFeedback {
+  has_errors: boolean;
+  overall_score: number;
+  corrected_sentence: string;
+  grammar_errors: RealtimeGrammarError[];
+  expression_suggestions: RealtimeExpressionSuggestion[];
+  summary_cn: string;
+}
+
+export interface SendMessageResponse {
+  messages: Message[];
+  feedback: RealtimeFeedback | null;
+  pronunciation: PronunciationResult | null;
+}
+
+// ============================================================
 // Sessions API
 // ============================================================
 
@@ -84,6 +118,7 @@ export interface Session {
   scene_name: string;
   difficulty: string;
   model: string;
+  training_mode: string;
   status: string;
   total_rounds: number;
   avg_pronunciation_score: number;
@@ -155,8 +190,8 @@ export interface Evaluation {
 }
 
 export const sessionsApi = {
-  create: (scene_key: string, difficulty: string, model: string) =>
-    api.post<Session>("/api/sessions", { scene_key, difficulty, model }),
+  create: (scene_key: string, difficulty: string, model: string, training_mode: string = "immersive") =>
+    api.post<Session>("/api/sessions", { scene_key, difficulty, model, training_mode }),
 
   list: (limit = 20) => api.get<Session[]>("/api/sessions", { params: { limit } }),
 
@@ -168,8 +203,11 @@ export const sessionsApi = {
   getMessages: (sessionId: number) =>
     api.get<Message[]>(`/api/sessions/${sessionId}/messages`),
 
-  sendMessage: (sessionId: number, content: string) =>
-    api.post<Message[]>(`/api/sessions/${sessionId}/messages`, { content }),
+  sendMessage: (sessionId: number, content: string, audioBase64?: string) =>
+    api.post<SendMessageResponse>(`/api/sessions/${sessionId}/messages`, {
+      content,
+      audio_base64: audioBase64 || "",
+    }),
 
   getDetail: (sessionId: number) =>
     api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),
@@ -282,6 +320,20 @@ export const pronunciationApi = {
     api.post<PronunciationResult>("/api/pronunciation/assess", {
       recognized_text,
       reference_text,
+    }),
+
+  /** Audio-based assessment using Chivox MCP (phoneme-level), with LLM fallback */
+  assessAudio: (
+    audio_base64: string,
+    reference_text: string,
+    recognized_text: string = "",
+    accent: string = "en-US",
+  ) =>
+    api.post<PronunciationResult>("/api/pronunciation/assess-audio", {
+      audio_base64,
+      reference_text,
+      recognized_text,
+      accent,
     }),
 };
 
