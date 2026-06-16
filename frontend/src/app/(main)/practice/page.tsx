@@ -655,6 +655,7 @@ export default function PracticePage() {
   const speech = useSpeechRecognition();
   const audio = useAudioRecorder();
   const audioBase64Ref = useRef<string | null>(null);
+  const wasRecordingAudioRef = useRef(false);  // tracks whether mic was used (vs. text-only)
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scene = scenes.find((s) => s.key === activeSession?.scene_key);
@@ -678,16 +679,23 @@ export default function PracticePage() {
     if (audio.audioBase64 && !audio.isRecording && pendingSendRef.current) {
       const text = pendingSendRef.current;
       pendingSendRef.current = "";
+      wasRecordingAudioRef.current = false;
       handleSendWithText(text);
     }
   }, [audio.audioBase64, audio.isRecording]);
+
+  // Track recording state for race-condition guard
+  useEffect(() => {
+    if (audio.isRecording) wasRecordingAudioRef.current = true;
+  }, [audio.isRecording]);
 
   // Auto-send when speech stops and has content
   useEffect(() => {
     if (!speech.isListening && speech.transcript.trim() && activeSession) {
       pendingSendRef.current = speech.transcript.trim();
-      // If audio wasn't recording (text-only mode), send after short delay
-      if (!audio.isRecording && !audio.audioBase64) {
+      // Only auto-send if user was NOT recording audio (text-only mode).
+      // When recording, wait for audio base64 → the effect above handles send.
+      if (!wasRecordingAudioRef.current) {
         const text = pendingSendRef.current;
         pendingSendRef.current = "";
         const timer = setTimeout(() => {
