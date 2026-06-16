@@ -6,7 +6,7 @@ import {
   Mic, MicOff, Copy, Trash2, Volume2, PanelLeftClose, PanelLeftOpen,
   Loader2, Sparkles, BarChart3, Edit3, Check, ArrowRight, X,
 } from "lucide-react";
-import { ttsApi } from "@/lib/api";
+import { ttsApi, asrApi } from "@/lib/api";
 
 /* ═══════════════════ Helpers ═══════════════════ */
 
@@ -150,6 +150,162 @@ function useSpeechRecognition(lang: string) {
   return { isListening, isSupported, finalTranscript, interimTranscript, error, start, stop, clearError };
 }
 
+/* ═══════════════════ iFlytek ASR Hook (MediaRecorder-based) ═══════════════════ */
+
+/**
+ * Convert an audio Blob (WebM/Opus) to WAV (16kHz 16bit mono) base64.
+ * Uses Web Audio API for decoding — no ffmpeg needed.
+ */
+async function blobToWavBase64(blob: Blob): Promise<string> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioCtx = new AudioContext({ sampleRate: 16000 });
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+  // Get mono PCM data (mix down to mono if stereo)
+  const channelData = audioBuffer.getChannelData(0);
+  const sourceRate = audioBuffer.sampleRate;
+  const targetRate = 16000;
+
+  // Resample to 16kHz using linear interpolation
+  const ratio = sourceRate / targetRate;
+  const resampledLength = Math.floor(channelData.length / ratio);
+  const resampled = new Float32Array(resampledLength);
+  for (let i = 0; i < resampledLength; i++) {
+    const srcIndex = i * ratio;
+    const srcIndexFloor = Math.floor(srcIndex);
+    const srcIndexCeil = Math.min(srcIndexFloor + 1, channelData.length - 1);
+    const t = srcIndex - srcIndexFloor;
+    resampled[i] = channelData[srcIndexFloor] * (1 - t) + channelData[srcIndexCeil] * t;
+  }
+
+  audioCtx.close();
+
+  // Convert Float32 to Int16 PCM
+  const pcmLength = resampled.length;
+  const wavBuffer = new ArrayBuffer(44 + pcmLength * 2);
+  const view = new DataView(wavBuffer);
+
+  // WAV header
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + pcmLength * 2, true);  // file size - 8
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);                   // chunk size
+  view.setUint16(20, 1, true);                    // PCM format
+  view.setUint16(22, 1, true);                    // mono
+  view.setUint32(24, 16000, true);                // sample rate
+  view.setUint32(28, 16000 * 2, true);            // byte rate
+  view.setUint16(32, 2, true);                    // block align
+  view.setUint16(34, 16, true);                   // bits per sample
+  writeString(36, "data");
+  view.setUint32(40, pcmLength * 2, true);        // data size
+
+  // Write PCM samples (clamped to Int16 range)
+  let offset = 44;
+  for (let i = 0; i < pcmLength; i++) {
+    const sample = Math.max(-1, Math.min(1, resampled[i]));
+    const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+    view.setInt16(offset, intSample, true);
+    offset += 2;
+  }
+
+  // Convert to base64
+  const bytes = new Uint8Array(wavBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function useIflytekASR(lang: string) {
+  const [isListening, setIsListening] = useState(false);
+  const [finalTranscript, setFinalTranscript] = useState("");
+  const [error, setError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  const start = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm",
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach((t) => t.stop());
+
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        if (blob.size < 100) {
+          setError("录音太短，请重试");
+          setIsListening(false);
+          return;
+        }
+
+        setIsProcessing(true);
+        try {
+          // Convert WebM to WAV (16kHz PCM) on the frontend — no ffmpeg needed
+          const base64 = await blobToWavBase64(blob);
+
+          // Map lang to iFlytek language code
+          const langMap: Record<string, string> = {
+            "en-US": "en_us",
+            "en-GB": "en_us",
+            "zh-CN": "zh_cn",
+            "ja-JP": "ja_jp",
+          };
+
+          const { data } = await asrApi.transcribe(base64, langMap[lang] || "en_us");
+          setFinalTranscript(data.text || "(未识别到语音)");
+        } catch (err: any) {
+          const msg = err?.response?.data?.detail || err?.message || "识别失败";
+          setError(msg);
+        } finally {
+          setIsProcessing(false);
+          setIsListening(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+      setFinalTranscript("");
+      setError("");
+    } catch (err: any) {
+      if (err.name === "NotAllowedError") {
+        setError("not-allowed");
+      } else {
+        setError("audio-capture");
+      }
+    }
+  }, [lang]);
+
+  const stop = useCallback(() => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state === "recording") {
+      rec.stop();
+    }
+  }, []);
+
+  const clearError = useCallback(() => setError(""), []);
+
+  return { isListening, finalTranscript, error, isProcessing, start, stop, clearError };
+}
+
 /* ═══════════════════ Stat Badge ═══════════════════ */
 
 function StatBadge({ label, value }: { label: string; value: string | number }) {
@@ -168,6 +324,7 @@ const SIDEBAR_KEY = "asr_sidebar_v1";
 
 export default function ASRPage() {
   const [lang, setLang] = useState("en-US");
+  const [asrProvider, setAsrProvider] = useState<"web" | "iflytek">("web");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -179,16 +336,53 @@ export default function ASRPage() {
   const [manualText, setManualText] = useState("");
 
   const speech = useSpeechRecognition(lang);
+  const iflytek = useIflytekASR(lang);
   const router = useRouter();
+
+  // Determine active ASR state based on provider
+  const asrState = asrProvider === "iflytek" ? iflytek : speech;
+  const isListening = asrState.isListening;
+  const hasSupport = asrProvider === "iflytek" ? true : speech.isSupported;
+  const currentError = asrState.error;
+  const isIflytekProcessing = asrProvider === "iflytek" ? iflytek.isProcessing : false;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
   const manualRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── Auto-save iFlytek result to history when it arrives (async) ──
+  const iflytekResultRef = useRef(iflytek.finalTranscript);
+  useEffect(() => {
+    // Only trigger when iFlytek result actually changes (non-empty)
+    if (
+      asrProvider === "iflytek" &&
+      iflytek.finalTranscript &&
+      iflytek.finalTranscript !== iflytekResultRef.current
+    ) {
+      iflytekResultRef.current = iflytek.finalTranscript;
+      const text = iflytek.finalTranscript.trim();
+      if (text && text !== "(未识别到语音)") {
+        const langLabel = LANGS.find((l) => l.key === lang)?.label ?? lang;
+        const newItem: HistoryItem = {
+          id: makeId(),
+          text,
+          lang,
+          langLabel,
+          timestamp: Date.now(),
+        };
+        setHistory((prev) => [newItem, ...prev].slice(0, 50));
+        setActiveHistoryId(newItem.id);
+        setEditText(text);
+        setIsEditing(false);
+        setManualText("");
+      }
+    }
+  }, [iflytek.finalTranscript, asrProvider, lang]);
 
   const displayText = isEditing
     ? editText
     : activeHistoryId
       ? history.find((h) => h.id === activeHistoryId)?.text ?? ""
-      : speech.finalTranscript;
+      : asrState.finalTranscript;
 
   const stats = calcStats(displayText || manualText || "");
 
@@ -219,8 +413,8 @@ export default function ASRPage() {
   // ── Handlers ──
 
   const handleStopAndSave = () => {
-    speech.stop();
-    const text = `${speech.finalTranscript} ${speech.interimTranscript}`.trim();
+    asrState.stop();
+    const text = asrState.finalTranscript.trim();
     if (!text) return;
     saveToHistory(text);
   };
@@ -343,7 +537,7 @@ export default function ASRPage() {
   };
 
   // Determine error info
-  const errorInfo = speech.error ? (ERROR_MESSAGES[speech.error] || { title: `错误: ${speech.error}`, desc: "请重试。" }) : null;
+  const errorInfo = currentError ? (ERROR_MESSAGES[currentError] || { title: `错误: ${currentError}`, desc: "请重试。" }) : null;
 
   return (
     <div className="flex h-full">
@@ -475,8 +669,34 @@ export default function ASRPage() {
               🎤 语音识别 ASR
             </h1>
             <p className="text-text-secondary text-sm max-w-md mx-auto leading-relaxed">
-              浏览器内置 Web Speech API · 免费实时转写 · 推荐 Chrome / Edge
+              {asrProvider === "iflytek"
+                ? "科大讯飞 iFlytek · 国内流畅访问 · 支持中/英/日"
+                : "浏览器内置 Web Speech API · 免费实时转写 · 推荐 Chrome / Edge"}
             </p>
+          </div>
+
+          {/* ASR Provider Selector */}
+          <div className="flex justify-center gap-2 mb-4">
+            <button
+              onClick={() => { setAsrProvider("web"); setIsEditing(false); speech.clearError(); }}
+              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                asrProvider === "web"
+                  ? "bg-[#5B4FCF] text-white shadow-md shadow-indigo-200"
+                  : "bg-white border border-border text-text-secondary hover:border-[#5B4FCF]/30"
+              }`}
+            >
+              🌐 浏览器 Web Speech
+            </button>
+            <button
+              onClick={() => { setAsrProvider("iflytek"); setIsEditing(false); iflytek.clearError(); }}
+              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                asrProvider === "iflytek"
+                  ? "bg-[#5B4FCF] text-white shadow-md shadow-indigo-200"
+                  : "bg-white border border-border text-text-secondary hover:border-[#5B4FCF]/30"
+              }`}
+            >
+              🤖 科大讯飞 iFlytek
+            </button>
           </div>
 
           {/* Language Selector */}
@@ -484,7 +704,7 @@ export default function ASRPage() {
             {LANGS.map((l) => (
               <button
                 key={l.key}
-                onClick={() => { setLang(l.key); setIsEditing(false); speech.clearError(); }}
+                onClick={() => { setLang(l.key); setIsEditing(false); asrState.clearError(); }}
                 className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
                   lang === l.key
                     ? "bg-[#5B4FCF] text-white shadow-md shadow-indigo-200"
@@ -496,7 +716,7 @@ export default function ASRPage() {
             ))}
           </div>
 
-          {!speech.isSupported ? (
+          {!hasSupport ? (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center animate-fade-in">
               <p className="text-amber-800 text-sm font-semibold mb-1">
                 ⚠️ 浏览器不支持
@@ -512,15 +732,15 @@ export default function ASRPage() {
                 <div className="flex flex-col items-center gap-6">
                   {/* Big Mic Button */}
                   <button
-                    onClick={speech.isListening ? handleStopAndSave : speech.start}
+                    onClick={isListening ? handleStopAndSave : () => asrState.start()}
                     className={`w-20 h-20 rounded-full flex items-center justify-center text-white shadow-xl transition-all duration-500 ${
-                      speech.isListening
+                      isListening || isIflytekProcessing
                         ? "bg-red-500 animate-pulse shadow-red-300 scale-110"
                         : "bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-300 hover:scale-105 active:scale-95"
                     }`}
                   >
-                    {speech.isListening ? (
-                      <MicOff className="w-8 h-8" />
+                    {isListening || isIflytekProcessing ? (
+                      isIflytekProcessing ? <Loader2 className="w-8 h-8 animate-spin" /> : <MicOff className="w-8 h-8" />
                     ) : (
                       <Mic className="w-8 h-8" />
                     )}
@@ -528,7 +748,14 @@ export default function ASRPage() {
 
                   {/* Status */}
                   <div className="text-center">
-                    {speech.isListening ? (
+                    {isIflytekProcessing ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#5B4FCF]" />
+                        <span className="text-sm font-semibold text-[#5B4FCF]">
+                          正在识别中...
+                        </span>
+                      </div>
+                    ) : isListening ? (
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
                         <span className="text-sm font-semibold text-red-500">
@@ -549,7 +776,7 @@ export default function ASRPage() {
 
                 {/* Transcript / Edit Area */}
                 <div className="mt-6 min-h-[80px] p-4 bg-bg-main rounded-xl border border-border/50">
-                  {speech.isListening ? (
+                  {isListening && asrProvider === "web" ? (
                     <p className="text-text-primary text-lg leading-relaxed">
                       {speech.finalTranscript}
                       {speech.interimTranscript && (
@@ -558,6 +785,11 @@ export default function ASRPage() {
                           {speech.interimTranscript}
                         </span>
                       )}
+                    </p>
+                  ) : isListening && asrProvider === "iflytek" ? (
+                    <p className="text-text-light/40 text-sm italic flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      正在录制音频...
                     </p>
                   ) : isEditing ? (
                     <textarea
@@ -588,7 +820,7 @@ export default function ASRPage() {
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-danger">{errorInfo.title}</p>
                         <p className="text-xs text-danger/70 mt-1.5 leading-relaxed">{errorInfo.desc}</p>
-                        {speech.error === "network" && (
+                        {currentError === "network" && asrProvider === "web" && (
                           <div className="mt-3 p-3 bg-white/60 rounded-lg border border-border/50">
                             <p className="text-xs font-medium text-text-secondary mb-2">
                               💡 手动输入替代方案（语音不可用时）
@@ -629,7 +861,7 @@ export default function ASRPage() {
                           </div>
                         )}
                       </div>
-                      <button onClick={() => speech.clearError()}
+                      <button onClick={() => asrState.clearError()}
                         className="text-danger/40 hover:text-danger/70 transition-colors shrink-0">
                         <X className="w-4 h-4" />
                       </button>
@@ -639,7 +871,7 @@ export default function ASRPage() {
               </div>
 
               {/* ── After Recording: Stats + Actions ── */}
-              {displayText && !speech.isListening && (
+              {displayText && !isListening && !isIflytekProcessing && (
                 <div className="animate-fade-in space-y-4">
                   {/* Statistics */}
                   <div className="bg-white rounded-2xl border border-border p-4 shadow-sm">

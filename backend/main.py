@@ -11,6 +11,7 @@ from backend.api.grammar import router as grammar_router
 from backend.api.tts import router as tts_router
 from backend.api.pronunciation import router as pronunciation_router
 from backend.api.report import router as report_router
+from backend.api.asr import router as asr_router
 
 app = FastAPI(title="AI Spoken English Trainer", version="1.0.0")
 
@@ -32,6 +33,7 @@ app.include_router(grammar_router)
 app.include_router(tts_router)
 app.include_router(pronunciation_router)
 app.include_router(report_router)
+app.include_router(asr_router)
 
 
 @app.on_event("startup")
