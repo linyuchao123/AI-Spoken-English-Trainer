@@ -94,7 +94,8 @@ async def create_new_session(req: CreateSessionRequest, request: Request):
 
     # ── Generate AI opening greeting dynamically per model ──────────
     try:
-        opening = generate_opening(
+        opening = await asyncio.to_thread(
+            generate_opening,
             scene_key=req.scene_key,
             difficulty=req.difficulty,
             model_key=req.model,
@@ -321,12 +322,11 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     # 1. Persist user message
     user_msg_id = add_message(session_id, "user", req.content)
 
-    # 1.5 ── Pronunciation Assessment (Chivox MCP, runs concurrently with LLM) ──
+    # 1.5 ── Pronunciation Assessment (Chivox MCP, pure async, concurrent with LLM) ──
     pron_task = None
     if req.audio_base64 and req.audio_base64.strip():
         pron_task = asyncio.create_task(
-            asyncio.to_thread(
-                _run_pronunciation_assessment,
+            _run_pronunciation_assessment_async(
                 audio_base64=req.audio_base64,
                 reference_text=req.content,
                 session_id=session_id,
@@ -341,9 +341,10 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
         for m in all_messages[-20:]
     ]
 
-    # 3. Generate AI reply via LLM
+    # 3. Generate AI reply via LLM (in thread pool to avoid blocking event loop)
     try:
-        ai_response = generate_reply(
+        ai_response = await asyncio.to_thread(
+            generate_reply,
             messages_history=history,
             scene_key=session["scene_key"],
             difficulty=session["difficulty"],
@@ -434,35 +435,51 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     )
 
 
-def _run_pronunciation_assessment(
+async def _run_pronunciation_assessment_async(
     audio_base64: str,
     reference_text: str,
     session_id: int,
     message_id: int,
 ):
-    """Run Chivox MCP pronunciation assessment and save to DB.
+    """Run Chivox MCP pronunciation assessment (pure async, no nested event loops).
 
-    Called in a background thread via asyncio.to_thread().
-    Chivox is the primary engine; falls back to LLM text comparison
-    if Chivox is unavailable or returns an error.
-
-    Returns:
-        PronunciationResponse or None on failure
+    Called via asyncio.create_task() for true concurrency with LLM reply generation.
+    Chivox is the primary engine; returns None on failure (no LLM fallback — the
+    conversation page has no separate "expected text" for meaningful comparison).
     """
-    from modules.pronunciation import assess_audio
+    from modules.chivox_pronunciation import assess_with_chivox, chivox_to_pronunciation_result
 
-    result = assess_audio(
-        audio_base64=audio_base64,
-        reference_text=reference_text,
-        recognized_text=reference_text,
-        accent="en-US",
+    # Validate audio
+    if not audio_base64 or not audio_base64.strip():
+        logger.warning("[pronunciation] Empty audio data, skipping assessment")
+        return None
+
+    # Try Chivox MCP (async, no asyncio.run() needed)
+    try:
+        chivox_result = await assess_with_chivox(
+            audio_base64=audio_base64,
+            reference_text=reference_text,
+            accent="en-US",
+        )
+    except Exception as exc:
+        logger.warning("[pronunciation] Chivox MCP call failed: %s", exc)
+        return None
+
+    if chivox_result.error:
+        logger.warning("[pronunciation] Chivox returned error: %s", chivox_result.error)
+        return None
+
+    if chivox_result.overall <= 0:
+        logger.warning("[pronunciation] Chivox returned zero scores, skipping")
+        return None
+
+    logger.info(
+        "[pronunciation] Chivox: overall=%.0f, accuracy=%.0f, pron=%.0f",
+        chivox_result.overall, chivox_result.accuracy, chivox_result.pron,
     )
 
-    if result.error and not result.overall_score:
-        logger.warning(
-            "[pronunciation] Assessment returned error (no score): %s", result.error
-        )
-        return None
+    # Convert to project format
+    result = chivox_to_pronunciation_result(chivox_result)
 
     # Save to database
     try:
