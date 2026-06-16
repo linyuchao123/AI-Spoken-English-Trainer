@@ -22,6 +22,10 @@ from backend.models.schemas import (
     DetailGrammar,
     WordScoreResponse,
     EvaluationResponse,
+    RealtimeFeedbackResponse,
+    RealtimeGrammarError,
+    RealtimeExpressionSuggestion,
+    SendMessageResponse,
 )
 from utils.db import (
     create_session,
@@ -41,7 +45,7 @@ from utils.db import (
 from config.settings import SCENES
 from modules.llm import generate_reply, generate_opening
 from modules.evaluation import evaluate_session
-from modules.agents import run_evaluation_pipeline
+from modules.agents import run_evaluation_pipeline, run_realtime_feedback
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -53,6 +57,7 @@ def _session_to_response(s: dict) -> SessionResponse:
         scene_name=s["scene_name"],
         difficulty=s["difficulty"],
         model=s["model"],
+        training_mode=s.get("training_mode", "immersive"),
         status=s["status"],
         total_rounds=s["total_rounds"],
         avg_pronunciation_score=s["avg_pronunciation_score"],
@@ -81,6 +86,7 @@ async def create_new_session(req: CreateSessionRequest, request: Request):
         scene_name=scene["name"],
         difficulty=req.difficulty,
         model=req.model,
+        training_mode=req.training_mode,
         user_id=user_id,
     )
 
@@ -292,9 +298,13 @@ async def get_messages(session_id: int, request: Request):
     ]
 
 
-@router.post("/{session_id}/messages", response_model=list[MessageResponse])
+@router.post("/{session_id}/messages", response_model=SendMessageResponse)
 async def send_message(session_id: int, req: SendMessageRequest, request: Request):
-    """Send a user message and get an AI reply via the LLM conversation engine."""
+    """Send a user message and get an AI reply via the LLM conversation engine.
+
+    In 'realtime' training mode, also runs per-message grammar/expression
+    analysis and returns real-time feedback alongside the messages.
+    """
     user = require_auth(request)
 
     session = get_session(session_id)
@@ -332,17 +342,68 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     # 4. Persist AI response
     add_message(session_id, "ai", ai_response)
 
-    # 5. Return full message list
+    # 5. ── Real-time feedback (realtime mode only) ──────────────────
+    feedback: Optional[RealtimeFeedbackResponse] = None
+    training_mode = session.get("training_mode", "immersive")
+
+    if training_mode == "realtime":
+        from modules.agents.realtime_feedback_graph import RealtimeFeedbackOutput
+        try:
+            rt_result: RealtimeFeedbackOutput = await asyncio.to_thread(
+                run_realtime_feedback,
+                user_message=req.content,
+                difficulty=session["difficulty"],
+            )
+            feedback = RealtimeFeedbackResponse(
+                has_errors=rt_result.has_errors,
+                overall_score=rt_result.overall_score,
+                corrected_sentence=rt_result.corrected_sentence,
+                grammar_errors=[
+                    RealtimeGrammarError(
+                        original_text=e.original_text,
+                        corrected_text=e.corrected_text,
+                        error_type=e.error_type,
+                        explanation=e.explanation,
+                        explanation_cn=e.explanation_cn,
+                    )
+                    for e in rt_result.grammar_errors
+                ],
+                expression_suggestions=[
+                    RealtimeExpressionSuggestion(
+                        original_phrase=s.original_phrase,
+                        improved_phrase=s.improved_phrase,
+                        explanation=s.explanation,
+                        explanation_cn=s.explanation_cn,
+                    )
+                    for s in rt_result.expression_suggestions
+                ],
+                summary_cn=rt_result.summary_cn,
+            )
+            logger.info(
+                "[send_message] Real-time feedback: score=%.0f, errors=%d, suggestions=%d",
+                rt_result.overall_score,
+                len(rt_result.grammar_errors),
+                len(rt_result.expression_suggestions),
+            )
+        except Exception as exc:
+            logger.warning("[send_message] Real-time feedback failed: %s", exc)
+            # Feedback failure is non-fatal — return messages without feedback
+            feedback = None
+
+    # 6. Return full message list + optional feedback
     messages = get_session_messages(session_id)
-    return [
-        MessageResponse(
-            id=m["id"],
-            role=m["role"],
-            content=m["content"],
-            created_at=str(m["created_at"]) if m.get("created_at") else None,
-        )
-        for m in messages
-    ]
+    return SendMessageResponse(
+        messages=[
+            MessageResponse(
+                id=m["id"],
+                role=m["role"],
+                content=m["content"],
+                created_at=str(m["created_at"]) if m.get("created_at") else None,
+            )
+            for m in messages
+        ],
+        feedback=feedback,
+    )
 
 
 # ============================================================

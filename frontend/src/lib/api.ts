@@ -75,6 +75,39 @@ export const scenesApi = {
 };
 
 // ============================================================
+// Real-time Feedback Types
+// ============================================================
+
+export interface RealtimeGrammarError {
+  original_text: string;
+  corrected_text: string;
+  error_type: string;
+  explanation: string;
+  explanation_cn: string;
+}
+
+export interface RealtimeExpressionSuggestion {
+  original_phrase: string;
+  improved_phrase: string;
+  explanation: string;
+  explanation_cn: string;
+}
+
+export interface RealtimeFeedback {
+  has_errors: boolean;
+  overall_score: number;
+  corrected_sentence: string;
+  grammar_errors: RealtimeGrammarError[];
+  expression_suggestions: RealtimeExpressionSuggestion[];
+  summary_cn: string;
+}
+
+export interface SendMessageResponse {
+  messages: Message[];
+  feedback: RealtimeFeedback | null;
+}
+
+// ============================================================
 // Sessions API
 // ============================================================
 
@@ -84,6 +117,7 @@ export interface Session {
   scene_name: string;
   difficulty: string;
   model: string;
+  training_mode: string;
   status: string;
   total_rounds: number;
   avg_pronunciation_score: number;
@@ -155,8 +189,8 @@ export interface Evaluation {
 }
 
 export const sessionsApi = {
-  create: (scene_key: string, difficulty: string, model: string) =>
-    api.post<Session>("/api/sessions", { scene_key, difficulty, model }),
+  create: (scene_key: string, difficulty: string, model: string, training_mode: string = "immersive") =>
+    api.post<Session>("/api/sessions", { scene_key, difficulty, model, training_mode }),
 
   list: (limit = 20) => api.get<Session[]>("/api/sessions", { params: { limit } }),
 
@@ -169,7 +203,7 @@ export const sessionsApi = {
     api.get<Message[]>(`/api/sessions/${sessionId}/messages`),
 
   sendMessage: (sessionId: number, content: string) =>
-    api.post<Message[]>(`/api/sessions/${sessionId}/messages`, { content }),
+    api.post<SendMessageResponse>(`/api/sessions/${sessionId}/messages`, { content }),
 
   getDetail: (sessionId: number) =>
     api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),

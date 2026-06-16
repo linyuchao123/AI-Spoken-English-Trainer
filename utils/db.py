@@ -51,6 +51,7 @@ def init_db():
             scene_name TEXT NOT NULL,
             difficulty TEXT NOT NULL,
             model TEXT NOT NULL,
+            training_mode TEXT DEFAULT 'immersive',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             ended_at TIMESTAMP,
             total_rounds INTEGER DEFAULT 0,
@@ -122,6 +123,12 @@ def init_db():
         pass  # Column already exists
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN oauth_id TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Migration: add training_mode column (for existing databases)
+    try:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN training_mode TEXT DEFAULT 'immersive'")
     except sqlite3.OperationalError:
         pass  # Column already exists
 
@@ -267,13 +274,13 @@ def update_user_avatar(user_id: int, avatar_url: str):
 # Session Operations
 # ============================================================
 
-def create_session(scene_key: str, scene_name: str, difficulty: str, model: str, user_id: int = None) -> int:
+def create_session(scene_key: str, scene_name: str, difficulty: str, model: str, training_mode: str = "immersive", user_id: int = None) -> int:
     """Create a new practice session. Returns session ID."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO sessions (user_id, scene_key, scene_name, difficulty, model) VALUES (?, ?, ?, ?, ?)",
-        (user_id, scene_key, scene_name, difficulty, model),
+        "INSERT INTO sessions (user_id, scene_key, scene_name, difficulty, model, training_mode) VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, scene_key, scene_name, difficulty, model, training_mode),
     )
     conn.commit()
     session_id = cursor.lastrowid

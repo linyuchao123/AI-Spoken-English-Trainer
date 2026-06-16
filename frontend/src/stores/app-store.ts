@@ -18,9 +18,11 @@ interface AppState {
   currentScene: string;
   currentDifficulty: string;
   currentModel: string;
+  currentTrainingMode: string;
   setCurrentScene: (key: string) => void;
   setCurrentDifficulty: (key: string) => void;
   setCurrentModel: (key: string) => void;
+  setCurrentTrainingMode: (mode: string) => void;
 
   // Session
   activeSession: Session | null;
@@ -63,21 +65,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentScene: "job_interview",
   currentDifficulty: "beginner",
   currentModel: "gpt-4o",
+  currentTrainingMode: "immersive",
   setCurrentScene: (key) => set({ currentScene: key }),
   setCurrentDifficulty: (key) => set({ currentDifficulty: key }),
   setCurrentModel: (key) => set({ currentModel: key }),
+  setCurrentTrainingMode: (mode) => set({ currentTrainingMode: mode }),
 
   // Session
   activeSession: null,
   setActiveSession: (session) => set({ activeSession: session }),
 
   createSession: async () => {
-    const { currentScene, currentDifficulty, currentModel } = get();
+    const { currentScene, currentDifficulty, currentModel, currentTrainingMode } = get();
     try {
       const { data } = await sessionsApi.create(
         currentScene,
         currentDifficulty,
-        currentModel
+        currentModel,
+        currentTrainingMode,
       );
       set({ activeSession: data });
       return data;
@@ -92,9 +97,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activeSession) return;
     try {
       await sessionsApi.end(activeSession.id);
-      set({ activeSession: null });
     } catch (err) {
       console.error("Failed to end session:", err);
+    } finally {
+      // Always clear the active session — the backend may have already ended it
+      // (e.g. 400 "Session is not active"), so we must clear local state.
+      set({ activeSession: null });
     }
   },
 }));

@@ -64,6 +64,7 @@ export default function Sidebar() {
   const handleEndSession = async () => {
     if (!activeSession) return;
     await endSession();
+    // Always navigate away from practice page — endSession always clears state
     router.push("/history");
   };
 
