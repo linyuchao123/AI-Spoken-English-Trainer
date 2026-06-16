@@ -21,6 +21,11 @@ AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 CHIVOX_API_KEY = os.getenv("CHIVOX_API_KEY", "")
 CHIVOX_MCP_URL = os.getenv("CHIVOX_MCP_URL", "https://mcp.cloud.chivox.com")
 
+# iFlytek (科大讯飞) ASR
+XF_APPID = os.getenv("XF_APPID", "")
+XF_API_KEY = os.getenv("XF_API_KEY", "")
+XF_API_SECRET = os.getenv("XF_API_SECRET", "")
+
 # ============================================================
 # Model Selection
 # ============================================================

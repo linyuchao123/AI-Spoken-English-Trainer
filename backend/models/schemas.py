@@ -354,3 +354,19 @@ class SendMessageResponse(BaseModel):
     messages: list[MessageResponse]
     feedback: Optional[RealtimeFeedbackResponse] = None
     pronunciation: Optional[PronunciationResponse] = None
+
+
+# ============================================================
+# ASR (Automatic Speech Recognition) Schemas
+# ============================================================
+
+class ASRRequest(BaseModel):
+    audio_base64: str = Field(..., min_length=1, description="Base64-encoded audio data (WAV/PCM 16k/16bit/mono recommended)")
+    language: str = Field(default="en_us", description="Language code: en_us, zh_cn, ja_jp, ko_kr")
+    accent: str = Field(default="", description="Accent for Chinese: mandarin, cantonese (only for zh_cn)")
+
+
+class ASRResponse(BaseModel):
+    text: str = Field(default="", description="Transcribed text")
+    language: str = Field(default="en_us")
+    provider: str = Field(default="iflytek", description="ASR provider name")

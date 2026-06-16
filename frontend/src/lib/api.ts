@@ -395,4 +395,27 @@ export const reportApi = {
   getLatest: () => api.get<ReportData>("/api/report/active/latest"),
 };
 
+// ============================================================
+// ASR API
+// ============================================================
+
+export interface ASRResult {
+  text: string;
+  language: string;
+  provider: string;
+}
+
+export const asrApi = {
+  /** Transcribe audio via iFlytek (科大讯飞) ASR */
+  transcribe: (audioBase64: string, language = "en_us", accent = "") =>
+    api.post<ASRResult>("/api/asr/transcribe", {
+      audio_base64: audioBase64,
+      language,
+      accent,
+    }),
+
+  /** Check if iFlytek ASR is configured */
+  status: () => api.get<{ configured: boolean; provider: string }>("/api/asr/status"),
+};
+
 export default api;
