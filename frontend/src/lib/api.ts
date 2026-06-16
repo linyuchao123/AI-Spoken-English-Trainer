@@ -105,6 +105,7 @@ export interface RealtimeFeedback {
 export interface SendMessageResponse {
   messages: Message[];
   feedback: RealtimeFeedback | null;
+  pronunciation: PronunciationResult | null;
 }
 
 // ============================================================
@@ -202,8 +203,11 @@ export const sessionsApi = {
   getMessages: (sessionId: number) =>
     api.get<Message[]>(`/api/sessions/${sessionId}/messages`),
 
-  sendMessage: (sessionId: number, content: string) =>
-    api.post<SendMessageResponse>(`/api/sessions/${sessionId}/messages`, { content }),
+  sendMessage: (sessionId: number, content: string, audioBase64?: string) =>
+    api.post<SendMessageResponse>(`/api/sessions/${sessionId}/messages`, {
+      content,
+      audio_base64: audioBase64 || "",
+    }),
 
   getDetail: (sessionId: number) =>
     api.get<SessionDetail>(`/api/sessions/${sessionId}/detail`),
@@ -316,6 +320,20 @@ export const pronunciationApi = {
     api.post<PronunciationResult>("/api/pronunciation/assess", {
       recognized_text,
       reference_text,
+    }),
+
+  /** Audio-based assessment using Chivox MCP (phoneme-level), with LLM fallback */
+  assessAudio: (
+    audio_base64: string,
+    reference_text: string,
+    recognized_text: string = "",
+    accent: string = "en-US",
+  ) =>
+    api.post<PronunciationResult>("/api/pronunciation/assess-audio", {
+      audio_base64,
+      reference_text,
+      recognized_text,
+      accent,
     }),
 };
 

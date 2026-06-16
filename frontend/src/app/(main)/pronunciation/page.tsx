@@ -8,6 +8,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Trash2, MicIcon
 } from "lucide-react";
 import { pronunciationApi, PronunciationResult, WordScore } from "@/lib/api";
+import { useAudioRecorder } from "./useAudioRecorder";
 
 /* ═══════════════════ 随机文本池 ═══════════════════ */
 
@@ -235,6 +236,7 @@ export default function PronunciationPage() {
   const [result, setResult] = useState<PronunciationResult | null>(null);
   const [error, setError] = useState("");
   const speech = useSpeechRecognition();
+  const audio = useAudioRecorder();
 
   // History sidebar state
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -305,7 +307,13 @@ export default function PronunciationPage() {
     setAssessing(true);
     setError("");
     try {
-      const { data } = await pronunciationApi.assess(speech.recognizedText, referenceText.trim());
+      // Use audio-based assessment (Chivox MCP primary, LLM fallback)
+      const { data } = await pronunciationApi.assessAudio(
+        audio.audioBase64 || "",
+        referenceText.trim(),
+        speech.recognizedText,
+        "en-US",
+      );
       setResult(data);
       if (data.error) {
         setError(data.error);
@@ -333,6 +341,7 @@ export default function PronunciationPage() {
 
   const resetAll = () => {
     speech.reset();
+    audio.reset();
     setResult(null);
     setError("");
     setActiveHistoryId(null);
@@ -498,10 +507,10 @@ export default function PronunciationPage() {
             </div>
             <h1 className="text-2xl font-extrabold text-text-primary mb-2">🎯 发音评测 Pronunciation Assessment</h1>
             <p className="text-text-secondary text-sm max-w-lg mx-auto leading-relaxed">
-              输入或随机生成一段英文文本，朗读后 AI 进行多维度发音分析
+              输入或随机生成一段英文文本，朗读后由 <span className="font-semibold text-sky-600">Chivox 驰声</span> 进行音素级发音分析
             </p>
             <p className="text-text-light text-xs mt-1 max-w-lg mx-auto">
-              Speak the text aloud — AI analyzes accuracy, stress, intonation, rhythm, and more
+              Speak the text aloud — Chivox phoneme-level AI analyzes accuracy, stress, intonation, rhythm, and more
             </p>
           </div>
 
@@ -575,14 +584,14 @@ export default function PronunciationPage() {
 
             <div className="flex items-center justify-center gap-4">
               {!speech.recognizedText && !speech.isListening ? (
-                <button onClick={speech.start}
+                <button onClick={async () => { speech.start(); await audio.start().catch(() => {}); }}
                   className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
                              bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] shadow-indigo-200 hover:scale-105 active:scale-95 transition-all"
                 >
                   <Mic className="w-4 h-4" /> 开始朗读 / Start Speaking
                 </button>
               ) : speech.isListening ? (
-                <button onClick={speech.stop}
+                <button onClick={() => { speech.stop(); audio.stop(); }}
                   className="flex items-center gap-2 px-8 py-3 rounded-full text-sm font-bold text-white shadow-lg
                              bg-red-500 animate-pulse shadow-red-200 scale-105 transition-all"
                 >
@@ -612,6 +621,11 @@ export default function PronunciationPage() {
                 <p className="text-center text-xs text-red-500 animate-pulse font-medium">
                   🎤 正在听... 请朗读文本 / Listening... Speak now
                 </p>
+                {audio.isRecording && (
+                  <p className="text-center text-[10px] text-sky-600 font-medium">
+                    🔴 音频录制中 (Chivox音素级评测) / Audio recording for phoneme-level assessment
+                  </p>
+                )}
                 {speech.interimText && (
                   <p className="text-center text-xs text-gray-400 italic">{speech.interimText}</p>
                 )}
@@ -624,6 +638,11 @@ export default function PronunciationPage() {
                 <p className="text-center text-xs text-emerald-600 font-medium">
                   ✅ 识别完成！点击「开始评估」/ Recognized! Click &quot;Assess&quot;
                 </p>
+                {audio.audioBase64 && (
+                  <p className="text-center text-[10px] text-sky-600 font-medium">
+                    🎵 音频已就绪 — 将使用 Chivox 音素级评测
+                  </p>
+                )}
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
                   <p className="text-xs font-semibold text-emerald-700 mb-1">🎙️ 识别结果 / What you said:</p>
                   <p className="text-sm text-emerald-800">{speech.recognizedText}</p>

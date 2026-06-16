@@ -1,5 +1,9 @@
 """
-Pronunciation Assessment engine using LLM text comparison (DeepSeek → OpenAI).
+Pronunciation Assessment engine.
+
+Supports two modes:
+1. Chivox MCP — real audio phoneme-level assessment (primary, when configured)
+2. LLM text comparison — DeepSeek → OpenAI fallback (legacy / text-only mode)
 
 Multi-dimension analysis: accuracy, fluency, completeness, stress, intonation,
 phoneme-level feedback, and per-word detailed scoring with bilingual corrections.
@@ -73,6 +77,81 @@ def assess(recognized_text: str, reference_text: str) -> PronunciationResult:
     except Exception as exc:
         logger.error("Pronunciation assessment failed: %s", exc)
         return _fallback_assess(recognized_text, reference_text)
+
+
+def assess_audio(
+    audio_base64: str,
+    reference_text: str,
+    recognized_text: str = "",
+    accent: str = "en-US",
+) -> PronunciationResult:
+    """
+    Assess pronunciation using real audio analysis (Chivox MCP primary, LLM fallback).
+
+    Args:
+        audio_base64: Base64-encoded audio (mp3/wav/ogg/m4a)
+        reference_text: The expected text the student should read
+        recognized_text: Optional text recognized from speech (for LLM fallback)
+        accent: Accent rubric for Chivox (en-US, en-GB, en-AU)
+
+    Returns:
+        PronunciationResult with phoneme-level scoring from Chivox,
+        or LLM-based scoring as fallback.
+    """
+    from config.settings import CHIVOX_API_KEY
+
+    if not audio_base64 or not audio_base64.strip():
+        # No audio — fall back to text comparison if recognized_text available
+        if recognized_text.strip():
+            return assess(recognized_text, reference_text)
+        return PronunciationResult(
+            accuracy_score=0, fluency_score=0, completeness_score=0,
+            overall_score=0, error="No audio data provided / 未提供音频数据",
+        )
+
+    # Try Chivox MCP first
+    if CHIVOX_API_KEY and not CHIVOX_API_KEY.startswith("sk-your-"):
+        try:
+            from modules.chivox_pronunciation import (
+                assess_with_chivox_sync,
+                chivox_to_pronunciation_result,
+            )
+            chivox_result = assess_with_chivox_sync(
+                audio_base64=audio_base64,
+                reference_text=reference_text,
+                accent=accent,
+            )
+            if not chivox_result.error:
+                # Chivox may return all-zero scores for unsupported audio formats (e.g. webm/opus)
+                if chivox_result.overall > 0:
+                    logger.info(
+                        "[assess_audio] Chivox: overall=%.0f, accuracy=%.0f, pron=%.0f",
+                        chivox_result.overall, chivox_result.accuracy, chivox_result.pron,
+                    )
+                    return chivox_to_pronunciation_result(chivox_result)
+                else:
+                    logger.warning(
+                        "[assess_audio] Chivox returned all-zero scores — falling back to LLM"
+                    )
+            else:
+                logger.warning(
+                    "[assess_audio] Chivox failed: %s — falling back to LLM",
+                    chivox_result.error,
+                )
+        except Exception as exc:
+            logger.warning(
+                "[assess_audio] Chivox unavailable: %s — falling back to LLM", exc
+            )
+
+    # Fallback: LLM text comparison
+    if recognized_text.strip():
+        return assess(recognized_text, reference_text)
+
+    return PronunciationResult(
+        accuracy_score=0, fluency_score=0, completeness_score=0,
+        overall_score=0,
+        error="Chivox not configured and no recognized text for LLM fallback",
+    )
 
 
 def _build_prompt(recognized: str, reference: str) -> str:

@@ -17,6 +17,10 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 
+# Chivox MCP-based speech evaluation
+CHIVOX_API_KEY = os.getenv("CHIVOX_API_KEY", "")
+CHIVOX_MCP_URL = os.getenv("CHIVOX_MCP_URL", "https://mcp.cloud.chivox.com")
+
 # ============================================================
 # Model Selection
 # ============================================================

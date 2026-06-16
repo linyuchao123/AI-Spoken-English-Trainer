@@ -4,12 +4,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { sessionsApi, Message, ttsApi, RealtimeFeedback } from "@/lib/api";
+import { sessionsApi, Message, ttsApi, RealtimeFeedback, PronunciationResult } from "@/lib/api";
 import {
   Mic, Send, MicOff, Sparkles, Volume2, Bot, User,
   MessageSquare, StopCircle, Globe, ChevronDown, ChevronUp,
   Languages, RefreshCw, AlertCircle, ImageOff, CheckCircle2, Play,
+  BarChart3, Target, Zap,
 } from "lucide-react";
+import { useAudioRecorder } from "../pronunciation/useAudioRecorder";
 
 /* ──────────── Scene background helper ──────────── */
 function getSceneBg(sceneKey: string, difficulty: string): string {
@@ -283,12 +285,69 @@ function FeedbackCard({ feedback }: { feedback: RealtimeFeedback }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   Pronunciation Mini Card (Chivox score summary below user msgs)
+   ══════════════════════════════════════════════════════════════ */
+function PronunciationMiniCard({ pronunciation }: { pronunciation: PronunciationResult }) {
+  const score = pronunciation.overall_score;
+  const color =
+    score >= 85 ? "#10b981" :
+    score >= 70 ? "#f59e0b" :
+    score >= 50 ? "#f97316" : "#ef4444";
+  const grade =
+    score >= 90 ? "Excellent" :
+    score >= 80 ? "Very Good" :
+    score >= 70 ? "Good" :
+    score >= 60 ? "Fair" : "Needs Improvement";
+
+  return (
+    <div className="mt-2 animate-fade-in">
+      <div className="px-3 py-2 rounded-xl bg-sky-500/8 border border-sky-500/15">
+        <div className="flex items-center gap-2.5">
+          {/* Mini score ring */}
+          <div className="relative w-10 h-10 shrink-0">
+            <svg width="40" height="40" className="-rotate-90">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
+              <circle cx="20" cy="20" r="16" fill="none" stroke={color} strokeWidth="3"
+                strokeLinecap="round" strokeDasharray={2 * Math.PI * 16}
+                strokeDashoffset={2 * Math.PI * 16 * (1 - Math.min(100, Math.max(0, score)) / 100)}
+                className="transition-all duration-700 ease-out" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[10px] font-bold" style={{ color }}>{Math.round(score)}</span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Target className="w-3 h-3 text-sky-400" />
+              <span className="text-xs text-sky-300 font-semibold">发音评分 · {grade}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-white/50">准确度 {Math.round(pronunciation.accuracy_score)}</span>
+              <span className="text-[10px] text-white/30">·</span>
+              <span className="text-[10px] text-white/50">流利度 {Math.round(pronunciation.fluency_score)}</span>
+              <span className="text-[10px] text-white/30">·</span>
+              <span className="text-[10px] text-white/50">完整度 {Math.round(pronunciation.completeness_score)}</span>
+            </div>
+            {pronunciation.phoneme_highlights.length > 0 && (
+              <p className="text-[10px] text-amber-400/70 mt-1 line-clamp-1">
+                ⚠ {pronunciation.phoneme_highlights[0]}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    Chat Bubble Component
    ══════════════════════════════════════════════════════════════ */
 function ChatBubble({
   message, isSpeaking, isAutoPlaying, onReplay,
   userInitial, translationCn, showTranslation, onToggleTranslation,
-  feedback,
+  feedback, pronunciation,
 }: {
   message: Message & { translation_cn?: string };
   isSpeaking: boolean;
@@ -299,6 +358,7 @@ function ChatBubble({
   showTranslation?: boolean;
   onToggleTranslation?: (id: number) => void;
   feedback?: RealtimeFeedback | null;
+  pronunciation?: PronunciationResult | null;
 }) {
   const isUser = message.role === "user";
 
@@ -313,6 +373,10 @@ function ChatBubble({
           </div>
           {/* Real-time feedback card */}
           {feedback && <FeedbackCard feedback={feedback} />}
+          {/* Pronunciation score (Chivox/audio-based) */}
+          {pronunciation && !pronunciation.error && (
+            <PronunciationMiniCard pronunciation={pronunciation} />
+          )}
           <p className="text-right text-[10px] text-white/25 mt-1 mr-1">
             {formatTimestamp(message.created_at)}
           </p>
@@ -586,8 +650,11 @@ export default function PracticePage() {
   const [bgError, setBgError] = useState(false);
   const [expandedTranslations, setExpandedTranslations] = useState<Set<number>>(new Set());
   const [feedbackMap, setFeedbackMap] = useState<Record<number, RealtimeFeedback>>({});
+  const [pronunciationMap, setPronunciationMap] = useState<Record<number, PronunciationResult>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const speech = useSpeechRecognition();
+  const audio = useAudioRecorder();
+  const audioBase64Ref = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scene = scenes.find((s) => s.key === activeSession?.scene_key);
@@ -600,13 +667,34 @@ export default function PracticePage() {
   // Sync speech transcript to input
   useEffect(() => { if (speech.transcript) setInput(speech.transcript); }, [speech.transcript]);
 
+  // Keep audioBase64 ref in sync with audio recorder state
+  useEffect(() => {
+    audioBase64Ref.current = audio.audioBase64;
+  }, [audio.audioBase64]);
+
+  // When audio recording completes and we have pending text, auto-send
+  const pendingSendRef = useRef<string>("");
+  useEffect(() => {
+    if (audio.audioBase64 && !audio.isRecording && pendingSendRef.current) {
+      const text = pendingSendRef.current;
+      pendingSendRef.current = "";
+      handleSendWithText(text);
+    }
+  }, [audio.audioBase64, audio.isRecording]);
+
   // Auto-send when speech stops and has content
   useEffect(() => {
     if (!speech.isListening && speech.transcript.trim() && activeSession) {
-      const timer = setTimeout(() => {
-        handleSendWithText(speech.transcript.trim());
-      }, 400);
-      return () => clearTimeout(timer);
+      pendingSendRef.current = speech.transcript.trim();
+      // If audio wasn't recording (text-only mode), send after short delay
+      if (!audio.isRecording && !audio.audioBase64) {
+        const text = pendingSendRef.current;
+        pendingSendRef.current = "";
+        const timer = setTimeout(() => {
+          handleSendWithText(text);
+        }, 300);
+        return () => clearTimeout(timer);
+      }
     }
   }, [speech.isListening]);
 
@@ -618,6 +706,7 @@ export default function PracticePage() {
         setAutoPlayedIds(new Set());
         setExpandedTranslations(new Set());
         setFeedbackMap({});
+        setPronunciationMap({});
         setBgError(false);
       }).catch(() => setMessages([]));
     } else {
@@ -670,8 +759,12 @@ export default function PracticePage() {
     setFailedText("");
     setSendError("");
     setSending(true);
+
+    // Capture current audio base64 (from ref, which is synced with state)
+    const audioB64 = audioBase64Ref.current || undefined;
+
     try {
-      const { data } = await sessionsApi.sendMessage(activeSession.id, t);
+      const { data } = await sessionsApi.sendMessage(activeSession.id, t, audioB64);
       const msgs = data.messages || [];
       setMessages(msgs.map((m) => ({ ...m })));
 
@@ -686,6 +779,20 @@ export default function PracticePage() {
           }));
         }
       }
+
+      // Store pronunciation result if present
+      if (data.pronunciation) {
+        const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user");
+        if (lastUserMsg) {
+          setPronunciationMap((prev) => ({
+            ...prev,
+            [lastUserMsg.id]: data.pronunciation!,
+          }));
+        }
+      }
+
+      // Reset audio after successful send
+      audio.reset();
     } catch (err: any) {
       const errMsg = err?.response?.data?.detail || "消息发送失败，请重试";
       setSendError(errMsg);
@@ -876,6 +983,7 @@ export default function PracticePage() {
             showTranslation={expandedTranslations.has(msg.id)}
             onToggleTranslation={handleToggleTranslation}
             feedback={msg.role === "user" ? feedbackMap[msg.id] || null : null}
+            pronunciation={msg.role === "user" ? pronunciationMap[msg.id] || null : null}
           />
         ))}
 
@@ -947,7 +1055,10 @@ export default function PracticePage() {
           {/* Mic Button */}
           {speech.isSupported ? (
             <button
-              onClick={speech.isListening ? speech.stop : speech.start}
+              onClick={speech.isListening
+                ? () => { speech.stop(); audio.stop(); }
+                : () => { speech.start(); audio.start().catch(() => {}); }
+              }
               disabled={sending}
               className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white
                           shadow-lg transition-all duration-300 shrink-0 ${

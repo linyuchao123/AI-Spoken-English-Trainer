@@ -95,6 +95,7 @@ class SessionResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1)
+    audio_base64: str = Field(default="", description="Optional: base64-encoded audio for Chivox pronunciation assessment")
 
 
 class MessageResponse(BaseModel):
@@ -352,3 +353,4 @@ class SendMessageResponse(BaseModel):
     """Wrapper for send_message that may include real-time feedback."""
     messages: list[MessageResponse]
     feedback: Optional[RealtimeFeedbackResponse] = None
+    pronunciation: Optional[PronunciationResponse] = None
