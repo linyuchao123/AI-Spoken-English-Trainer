@@ -2,6 +2,7 @@
 Sessions API: create, list, end sessions and manage messages.
 """
 
+import asyncio
 import sys
 import os
 from typing import Optional
@@ -40,6 +41,7 @@ from utils.db import (
 from config.settings import SCENES
 from modules.llm import generate_reply, generate_opening
 from modules.evaluation import evaluate_session
+from modules.agents import run_evaluation_pipeline
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -138,42 +140,122 @@ async def end_current_session(session_id: int, request: Request):
 
     end_session(session_id)
 
-    # ── Run LLM multi-dimension evaluation ──
+    # ── Run LangGraph evaluation pipeline ────────────────────────────
+    # This 4-node agent workflow runs:
+    #   grammar_analyst -> pronunciation_analyst -> comprehensive_evaluator
+    #   -> report_generator
+    # On failure it falls back to the legacy synchronous evaluate_session().
     try:
         messages = get_session_messages(session_id)
-        eval_result = evaluate_session(
+        pronunciation_scores = [dict(s) for s in get_session_scores(session_id)]
+
+        session_info = {
+            "scene_name": session["scene_name"],
+            "difficulty": session["difficulty"],
+            "model": session["model"],
+            "total_rounds": session.get("total_rounds", 0),
+        }
+
+        pipeline_result = await asyncio.to_thread(
+            run_evaluation_pipeline,
             messages=[dict(m) for m in messages],
-            scene_name=session["scene_name"],
-            difficulty=session["difficulty"],
-            total_rounds=session.get("total_rounds", 0),
+            session_info=session_info,
+            pronunciation_scores=pronunciation_scores,
         )
+
+        # ── Extract scores from comprehensive_evaluator output ────────
+        eval_scores = pipeline_result.get("evaluation_scores", {})
+        report_data = pipeline_result.get("report", {})
+
+        # ── Build enriched evaluation_json (includes report for later use) ──
+        enriched_json = {
+            "summary": eval_scores.get("summary", ""),
+            "summary_cn": eval_scores.get("summary_cn", ""),
+            "strengths": eval_scores.get("strengths", []),
+            "weaknesses": eval_scores.get("weaknesses", []),
+            "suggestions": eval_scores.get("suggestions", []),
+            # ── Report data (used by /api/report/{id} endpoint) ───────
+            "report": {
+                "level_assessment": report_data.get("level_assessment", ""),
+                "level_assessment_cn": report_data.get("level_assessment_cn", ""),
+                "topics_covered": report_data.get("topics_covered", []),
+                "sentence_analyses": [
+                    {
+                        "message_index": sa.get("message_index", 0),
+                        "original_en": sa.get("original_en", ""),
+                        "translation_cn": sa.get("translation_cn", ""),
+                        "pronunciation_issues": sa.get("pronunciation_issues", []),
+                        "grammar_issues": sa.get("grammar_issues", []),
+                        "expression_improvements": sa.get("expression_improvements", []),
+                    }
+                    for sa in report_data.get("sentence_analyses", [])
+                ],
+            },
+        }
+
         save_session_evaluation(
             session_id=session_id,
-            overall_score=eval_result.overall_score,
-            grammar_score=eval_result.grammar_score,
-            vocabulary_score=eval_result.vocabulary_score,
-            fluency_score=eval_result.fluency_score,
-            expression_score=eval_result.expression_score,
-            naturalness_score=eval_result.naturalness_score,
-            emotion_score=eval_result.emotion_score,
-            evaluation_json={
-                "summary": eval_result.summary,
-                "strengths": eval_result.strengths,
-                "weaknesses": eval_result.weaknesses,
-                "suggestions": eval_result.suggestions,
-            },
+            overall_score=eval_scores.get("overall_score", 50),
+            grammar_score=eval_scores.get("grammar_score", 50),
+            vocabulary_score=eval_scores.get("vocabulary_score", 50),
+            fluency_score=eval_scores.get("fluency_score", 50),
+            expression_score=eval_scores.get("expression_score", 50),
+            naturalness_score=eval_scores.get("naturalness_score", 50),
+            emotion_score=eval_scores.get("emotion_score", 50),
+            evaluation_json=enriched_json,
         )
+
         # Update session avg_pronunciation_score with evaluation overall
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE sessions SET avg_pronunciation_score = ? WHERE id = ?",
-            (eval_result.overall_score, session_id),
+            (eval_scores.get("overall_score", 50), session_id),
         )
         conn.commit()
         conn.close()
+
+        logger.info("LangGraph evaluation pipeline completed for session %d", session_id)
+
     except Exception as exc:
-        logger.warning("Session evaluation skipped: %s", exc)
+        # ── Fallback to legacy synchronous evaluation ─────────────────
+        logger.warning(
+            "LangGraph pipeline failed (%s), falling back to legacy evaluation.", exc
+        )
+        try:
+            messages = get_session_messages(session_id)
+            eval_result = evaluate_session(
+                messages=[dict(m) for m in messages],
+                scene_name=session["scene_name"],
+                difficulty=session["difficulty"],
+                total_rounds=session.get("total_rounds", 0),
+            )
+            save_session_evaluation(
+                session_id=session_id,
+                overall_score=eval_result.overall_score,
+                grammar_score=eval_result.grammar_score,
+                vocabulary_score=eval_result.vocabulary_score,
+                fluency_score=eval_result.fluency_score,
+                expression_score=eval_result.expression_score,
+                naturalness_score=eval_result.naturalness_score,
+                emotion_score=eval_result.emotion_score,
+                evaluation_json={
+                    "summary": eval_result.summary,
+                    "strengths": eval_result.strengths,
+                    "weaknesses": eval_result.weaknesses,
+                    "suggestions": eval_result.suggestions,
+                },
+            )
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE sessions SET avg_pronunciation_score = ? WHERE id = ?",
+                (eval_result.overall_score, session_id),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as exc2:
+            logger.warning("Legacy evaluation also skipped: %s", exc2)
 
     session = get_session(session_id)
     return _session_to_response(session)

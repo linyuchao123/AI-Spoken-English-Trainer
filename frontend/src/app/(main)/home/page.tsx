@@ -90,7 +90,7 @@ export default function HomePage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-gradient-conic from-indigo-500/5 via-transparent to-amber-500/5 blur-2xl animate-pulse" style={{ animationDuration: "4s" }} />
         </div>
 
-        <div className="relative max-w-6xl mx-auto px-6 py-20 md:py-28">
+        <div className="relative max-w-6xl mx-auto px-4 md:px-6 py-14 md:py-28">
           {/* Badge */}
           <div className="flex justify-center mb-6 animate-fade-in">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
@@ -117,10 +117,10 @@ export default function HomePage() {
           </p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in" style={{ animationDelay: "0.4s" }}>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 mb-10 md:mb-16 animate-fade-in" style={{ animationDelay: "0.4s" }}>
             <Link
               href="/practice"
-              className="group flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] text-white font-bold text-lg shadow-2xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all duration-300"
+              className="group flex items-center gap-2.5 px-7 py-3 md:px-8 md:py-3.5 rounded-2xl bg-gradient-to-r from-[#5B4FCF] to-[#7C6FF7] text-white font-bold text-base md:text-lg shadow-2xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all duration-300"
             >
               <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
               开始练习
@@ -128,9 +128,9 @@ export default function HomePage() {
             </Link>
             <button
               onClick={() => handleQuickStart("job_interview")}
-              className="flex items-center gap-2 px-7 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 hover:border-white/20 transition-all duration-300 backdrop-blur-sm"
+              className="flex items-center gap-2 px-6 py-3 md:px-7 md:py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 hover:border-white/20 transition-all duration-300 backdrop-blur-sm text-sm md:text-base"
             >
-              <Zap className="w-5 h-5 text-amber-400" />
+              <Zap className="w-4 h-4 md:w-5 md:h-5 text-amber-400" />
               快速开始 · 职场面试
             </button>
           </div>
@@ -155,7 +155,7 @@ export default function HomePage() {
       </div>
 
       {/* ── Features Section ── */}
-      <section className="max-w-6xl mx-auto px-6 py-20 md:py-24">
+      <section className="max-w-6xl mx-auto px-4 md:px-6 py-14 md:py-24">
         <div className="text-center mb-14">
           <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4">
             智能陪练，全方位提升
@@ -186,7 +186,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Scenes Section ── */}
-      <section className="max-w-6xl mx-auto px-6 pb-24">
+      <section className="max-w-6xl mx-auto px-4 md:px-6 pb-16 md:pb-24">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4">
             选择场景，即刻开始
