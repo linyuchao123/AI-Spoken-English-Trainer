@@ -109,9 +109,9 @@ class EvaluationScoresOutput(BaseModel):
     emotion_score: float = Field(ge=0, le=100)
     summary: str = Field(description="2-3 sentence overall assessment in English")
     summary_cn: str = Field(description="2-3句中文总体评价")
-    strengths: list[str] = Field(min_length=2, description="At least 2 strengths")
-    weaknesses: list[str] = Field(min_length=2, description="At least 2 weaknesses with examples")
-    suggestions: list[str] = Field(min_length=3, description="At least 3 actionable suggestions")
+    strengths: list[str] = Field(min_length=2, description="At least 2 strengths (each item: 'English description / 中文说明' bilingual format)")
+    weaknesses: list[str] = Field(min_length=2, description="At least 2 weaknesses with examples (bilingual: English + 中文)")
+    suggestions: list[str] = Field(min_length=3, description="At least 3 actionable suggestions (bilingual: English + 中文)")
 
 
 class SentenceAnalysisItem(BaseModel):
@@ -378,8 +378,10 @@ def comprehensive_evaluator_node(state: EvaluationState) -> dict:
          "  avg_completeness={p_completeness}, avg_stress={p_stress}\n"
          "  avg_intonation={p_intonation}, avg_rhythm={p_rhythm}\n"
          "  comment: {pronunciation_comment}\n\n"
-         "Produce 7-dimension scores, a bilingual summary, strengths, weaknesses, "
-         "and at least 3 actionable suggestions."),
+         "Produce 7-dimension scores, a bilingual summary, bilingual strengths, bilingual weaknesses "
+         "(with concrete examples from the conversation), "
+         "and at least 3 bilingual actionable suggestions. "
+         "Each strength/weakness/suggestion item must include both English and 中文 (Chinese) annotations."),
     ])
 
     llm = get_fallback_model(temperature=0.3, max_tokens=2000)

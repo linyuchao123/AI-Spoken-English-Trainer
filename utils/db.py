@@ -132,6 +132,20 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # Migration: add audio columns to messages table (for voice recording playback)
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN audio_base64 TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN audio_mime_type TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN audio_duration REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     conn.commit()
     conn.close()
 
@@ -374,13 +388,22 @@ def delete_session(session_id: int) -> bool:
 # Message Operations
 # ============================================================
 
-def add_message(session_id: int, role: str, content: str) -> int:
-    """Add a message to a session. Returns message ID."""
+def add_message(session_id: int, role: str, content: str, audio_base64: str = "", audio_mime_type: str = "", audio_duration: float = 0) -> int:
+    """Add a message to a session. Returns message ID.
+    
+    Args:
+        session_id: Session ID
+        role: 'user' or 'ai'
+        content: Message text content
+        audio_base64: Optional base64-encoded audio recording (for user messages)
+        audio_mime_type: Optional audio MIME type (e.g. 'audio/webm;codecs=opus')
+        audio_duration: Optional audio duration in seconds
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-        (session_id, role, content),
+        "INSERT INTO messages (session_id, role, content, audio_base64, audio_mime_type, audio_duration) VALUES (?, ?, ?, ?, ?, ?)",
+        (session_id, role, content, audio_base64, audio_mime_type, audio_duration),
     )
     conn.commit()
     msg_id = cursor.lastrowid

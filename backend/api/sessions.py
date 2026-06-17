@@ -296,6 +296,9 @@ async def get_messages(session_id: int, request: Request):
             role=m["role"],
             content=m["content"],
             created_at=str(m["created_at"]) if m.get("created_at") else None,
+            audio_base64=m.get("audio_base64", "") or "",
+            audio_mime_type=m.get("audio_mime_type", "") or "",
+            audio_duration=m.get("audio_duration", 0) or 0,
         )
         for m in messages
     ]
@@ -319,8 +322,13 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
     if session["status"] != "active":
         raise HTTPException(status_code=400, detail="Session is not active.")
 
-    # 1. Persist user message
-    user_msg_id = add_message(session_id, "user", req.content)
+    # 1. Persist user message (with audio if provided)
+    user_msg_id = add_message(
+        session_id, "user", req.content,
+        audio_base64=req.audio_base64 or "",
+        audio_mime_type=_detect_audio_mime(req.audio_base64) if req.audio_base64 else "",
+        audio_duration=req.audio_duration or 0,
+    )
 
     # 1.5 ── Pronunciation Assessment (Chivox MCP, pure async, concurrent with LLM) ──
     pron_task = None
@@ -427,6 +435,9 @@ async def send_message(session_id: int, req: SendMessageRequest, request: Reques
                 role=m["role"],
                 content=m["content"],
                 created_at=str(m["created_at"]) if m.get("created_at") else None,
+                audio_base64=m.get("audio_base64", "") or "",
+                audio_mime_type=m.get("audio_mime_type", "") or "",
+                audio_duration=m.get("audio_duration", 0) or 0,
             )
             for m in messages
         ],
@@ -542,6 +553,28 @@ async def _run_pronunciation_assessment_async(
     )
 
 
+def _detect_audio_mime(audio_base64: str) -> str:
+    """Detect MIME type from base64-encoded audio header bytes."""
+    if not audio_base64:
+        return ""
+    import base64 as _b64
+    try:
+        raw = _b64.b64decode(audio_base64[:32])
+        if raw[:4] == b"RIFF":
+            return "audio/wav"
+        if raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
+            return "audio/mpeg"
+        if raw[:4] == b"OggS":
+            return "audio/ogg"
+        if raw[:4] == b"ftyp":
+            return "audio/mp4"
+        if raw[:4] == b"\x1a\x45\xdf\xa3":
+            return "audio/webm"
+    except Exception:
+        pass
+    return "audio/webm;codecs=opus"  # default for browser MediaRecorder
+
+
 # ============================================================
 # Session Detail (history review with translations + scores)
 # ============================================================
@@ -639,11 +672,19 @@ async def get_session_detail(session_id: int, request: Request):
         if msg_id in scores_by_msg:
             s = scores_by_msg[msg_id]
             words_data = []
+            phoneme_highlights = []
+            stress_score = 0.0
+            intonation_score = 0.0
+            rhythm_score = 0.0
             err_details = s.get("error_details")
             if err_details:
                 try:
                     parsed = (_json.loads(err_details) if isinstance(err_details, str) else err_details)
                     words_data = parsed.get("words", []) if isinstance(parsed, dict) else []
+                    phoneme_highlights = parsed.get("phoneme_highlights", []) if isinstance(parsed, dict) else []
+                    stress_score = float(parsed.get("stress_score", 0)) if isinstance(parsed, dict) else 0.0
+                    intonation_score = float(parsed.get("intonation_score", 0)) if isinstance(parsed, dict) else 0.0
+                    rhythm_score = float(parsed.get("rhythm_score", 0)) if isinstance(parsed, dict) else 0.0
                 except Exception:
                     pass
             pron = DetailPronunciation(
@@ -651,10 +692,16 @@ async def get_session_detail(session_id: int, request: Request):
                 accuracy_score=round(s.get("accuracy_score", 0), 1),
                 fluency_score=round(s.get("fluency_score", 0), 1),
                 completeness_score=round(s.get("completeness_score", 0), 1),
+                stress_score=round(stress_score, 1),
+                intonation_score=round(intonation_score, 1),
+                rhythm_score=round(rhythm_score, 1),
+                phoneme_highlights=phoneme_highlights,
                 words=[WordScoreResponse(
                     word=w.get("word", ""),
                     accuracy_score=round(w.get("accuracy_score", 0), 1),
                     error_type=w.get("error_type", "None"),
+                    expected_pronunciation=w.get("expected_pronunciation", ""),
+                    correction_cn=w.get("correction_cn", ""),
                 ) for w in words_data],
             )
 
@@ -678,6 +725,9 @@ async def get_session_detail(session_id: int, request: Request):
             translation_cn=translations.get(msg_id, ""),
             pronunciation=pron,
             grammar=gram,
+            audio_base64=m.get("audio_base64", "") or "",
+            audio_mime_type=m.get("audio_mime_type", "") or "",
+            audio_duration=m.get("audio_duration", 0) or 0,
         ))
 
     return SessionDetailResponse(

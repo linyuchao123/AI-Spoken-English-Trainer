@@ -64,6 +64,9 @@ async def _build_report(session: dict) -> ReportResponse:
     1. If evaluation_json contains a "report" field (LangGraph pipeline output),
        use it directly — no extra LLM call.
     2. Otherwise fall back to calling generate_report() (legacy path).
+
+    In both paths, sentence_analyses are enriched with Chivox phoneme-level
+    pronunciation scores from the pronunciation_scores table.
     """
     session_id = session["id"]
 
@@ -80,12 +83,24 @@ async def _build_report(session: dict) -> ReportResponse:
     import json as _json
 
     cached_report = None
+    # Top-level JSON fields (summary, strengths, etc.) — parsed from evaluation_json
+    json_summary = ""
+    json_summary_cn = ""
+    json_strengths: list = []
+    json_weaknesses: list = []
+    json_suggestions: list = []
     if evaluation:
         raw_json = evaluation.get("evaluation_json")
         if raw_json:
             try:
                 parsed = _json.loads(raw_json) if isinstance(raw_json, str) else raw_json
                 cached_report = parsed.get("report")
+                # Extract top-level fields from parsed JSON (NOT from eval_dict SQL columns)
+                json_summary = parsed.get("summary", "")
+                json_summary_cn = parsed.get("summary_cn", "")
+                json_strengths = parsed.get("strengths", [])
+                json_weaknesses = parsed.get("weaknesses", [])
+                json_suggestions = parsed.get("suggestions", [])
             except Exception:
                 pass
 
@@ -95,19 +110,24 @@ async def _build_report(session: dict) -> ReportResponse:
         for i, s in enumerate(scores) if s.get("overall_score")
     ]
 
+    # ── Build Chivox score lookup keyed by user message sequence index ──────────
+    chivox_lookup = _build_chivox_lookup(messages, scores)
+
     # ── Path A: Use LangGraph-cached report (no LLM call) ──────────────────────
     if cached_report:
-        sentence_analyses = [
-            SentenceAnalysisItem(
-                message_index=sa.get("message_index", i),
-                original_en=sa.get("original_en", ""),
-                translation_cn=sa.get("translation_cn", ""),
-                pronunciation_issues=sa.get("pronunciation_issues", []),
-                grammar_issues=sa.get("grammar_issues", []),
-                expression_improvements=sa.get("expression_improvements", []),
-            )
+        raw_sentence_analyses = [
+            {
+                "message_index": sa.get("message_index", i),
+                "original_en": sa.get("original_en", ""),
+                "translation_cn": sa.get("translation_cn", ""),
+                "pronunciation_issues": sa.get("pronunciation_issues", []),
+                "grammar_issues": sa.get("grammar_issues", []),
+                "expression_improvements": sa.get("expression_improvements", []),
+            }
             for i, sa in enumerate(cached_report.get("sentence_analyses", []))
         ]
+
+        sentence_analyses = _enrich_with_chivox(raw_sentence_analyses, chivox_lookup)
 
         score_breakdown = ScoreBreakdown(
             grammar_score=round(eval_dict.get("grammar_score", 0), 1),
@@ -133,11 +153,11 @@ async def _build_report(session: dict) -> ReportResponse:
             error_stats=error_stats,
             score_history=score_history,
             score_breakdown=score_breakdown,
-            summary=eval_dict.get("summary", ""),
-            summary_cn=cached_report.get("summary_cn", eval_dict.get("summary_cn", "")),
-            strengths=eval_dict.get("strengths", []),
-            weaknesses=eval_dict.get("weaknesses", []),
-            suggestions=eval_dict.get("suggestions", []),
+            summary=json_summary,
+            summary_cn=json_summary_cn,
+            strengths=json_strengths,
+            weaknesses=json_weaknesses,
+            suggestions=json_suggestions,
             topics_covered=cached_report.get("topics_covered", []),
             level_assessment=cached_report.get("level_assessment", ""),
             level_assessment_cn=cached_report.get("level_assessment_cn", ""),
@@ -178,17 +198,18 @@ async def _build_report(session: dict) -> ReportResponse:
         emotion_score=round(data.emotion_score, 1),
     )
 
-    sentence_analyses = [
-        SentenceAnalysisItem(
-            message_index=a.message_index,
-            original_en=a.original_en,
-            translation_cn=a.translation_cn,
-            pronunciation_issues=a.pronunciation_issues,
-            grammar_issues=a.grammar_issues,
-            expression_improvements=a.expression_improvements,
-        )
+    raw_sentence_analyses = [
+        {
+            "message_index": a.message_index,
+            "original_en": a.original_en,
+            "translation_cn": a.translation_cn,
+            "pronunciation_issues": a.pronunciation_issues,
+            "grammar_issues": a.grammar_issues,
+            "expression_improvements": a.expression_improvements,
+        }
         for a in data.sentence_analyses
     ]
+    sentence_analyses = _enrich_with_chivox(raw_sentence_analyses, chivox_lookup)
 
     return ReportResponse(
         session_id=data.session_id,
@@ -215,3 +236,73 @@ async def _build_report(session: dict) -> ReportResponse:
         level_assessment_cn=data.level_assessment_cn,
         sentence_analyses=sentence_analyses,
     )
+
+
+# ============================================================
+# Chivox enrichment helpers
+# ============================================================
+
+def _build_chivox_lookup(messages: list[dict], scores: list[dict]) -> dict[int, dict]:
+    """
+    Build a lookup dict mapping user message sequence index → Chivox score data.
+
+    The sentence_analyses use message_index to reference which user utterance
+    (by order, 0-based) they correspond to. We match Chivox scores by finding
+    the pronunciation_scores row for each user message and mapping it to
+    the user message's sequential index.
+    """
+    # Index scores by message_id
+    scores_by_msg: dict[int, dict] = {}
+    for s in scores:
+        scores_by_msg[s["message_id"]] = dict(s)
+
+    lookup: dict[int, dict] = {}
+    user_idx = 0
+    for m in messages:
+        if m["role"] != "user":
+            continue
+        msg_id = m["id"]
+        if msg_id in scores_by_msg:
+            s = scores_by_msg[msg_id]
+            # Parse error_details for phoneme highlights
+            phoneme_issues = []
+            err_details = s.get("error_details")
+            if err_details:
+                try:
+                    import json as _json
+                    parsed = _json.loads(err_details) if isinstance(err_details, str) else err_details
+                    phoneme_issues = parsed.get("phoneme_highlights", []) if isinstance(parsed, dict) else []
+                except Exception:
+                    pass
+
+            lookup[user_idx] = {
+                "chivox_score": round(s.get("overall_score", 0), 1),
+                "chivox_phoneme_issues": phoneme_issues,
+            }
+        user_idx += 1
+
+    return lookup
+
+
+def _enrich_with_chivox(
+    raw_analyses: list[dict],
+    chivox_lookup: dict[int, dict],
+) -> list[SentenceAnalysisItem]:
+    """
+    Merge Chivox phoneme-level scores into sentence analysis items.
+    """
+    enriched = []
+    for sa in raw_analyses:
+        msg_idx = sa.get("message_index", 0)
+        chivox_data = chivox_lookup.get(msg_idx, {})
+        enriched.append(SentenceAnalysisItem(
+            message_index=msg_idx,
+            original_en=sa.get("original_en", ""),
+            translation_cn=sa.get("translation_cn", ""),
+            pronunciation_issues=sa.get("pronunciation_issues", []),
+            grammar_issues=sa.get("grammar_issues", []),
+            expression_improvements=sa.get("expression_improvements", []),
+            chivox_score=chivox_data.get("chivox_score", 0),
+            chivox_phoneme_issues=chivox_data.get("chivox_phoneme_issues", []),
+        ))
+    return enriched

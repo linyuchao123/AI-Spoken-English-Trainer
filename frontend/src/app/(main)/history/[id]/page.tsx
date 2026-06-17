@@ -3,7 +3,35 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { sessionsApi, SessionDetail, DetailMessage } from "@/lib/api";
-import { ArrowLeft, Bot, User, Mic, AlertCircle, CheckCircle2, Lightbulb, TrendingUp, Clock, MessageSquare, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
+import { ArrowLeft, Bot, User, Mic, AlertCircle, CheckCircle2, Lightbulb, TrendingUp, Clock, MessageSquare, ChevronDown, ChevronUp, BarChart3, PlayCircle } from "lucide-react";
+
+/* ──── Audio Player Helper ──── */
+function playBase64Audio(base64: string, formatOrMime = "mp3"): Promise<void> {
+  return new Promise((resolve) => {
+    let mime: string;
+    if (formatOrMime.includes("/")) {
+      mime = formatOrMime.split(";")[0];
+    } else {
+      mime = formatOrMime === "mp3" ? "audio/mpeg" : `audio/${formatOrMime}`;
+    }
+    const audio = new Audio(`data:${mime};base64,${base64}`);
+    audio.onended = () => resolve();
+    audio.onerror = () => resolve();
+    audio.play().catch(() => resolve());
+  });
+}
+
+/* ──────────── Voice bar helpers ──────────── */
+
+function formatVoiceDuration(sec: number): string {
+  if (!sec || sec <= 0) return "1''";
+  return `${Math.round(sec)}''`;
+}
+
+function getVoiceBarWidth(sec: number): number {
+  if (!sec || sec <= 0) return 100;
+  return Math.min(240, Math.max(90, 70 + sec * 14));
+}
 
 /* ──── Expandable analysis panel ──── */
 function AnalysisPanel({ message, defaultOpen }: { message: DetailMessage; defaultOpen: boolean }) {
@@ -29,11 +57,37 @@ function AnalysisPanel({ message, defaultOpen }: { message: DetailMessage; defau
             <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100">
               <div className="flex items-center gap-1.5 mb-2">
                 <Mic className="w-3.5 h-3.5 text-purple-500" />
-                <span className="text-xs font-bold text-purple-700">发音评测</span>
+                <span className="text-xs font-bold text-purple-700">Chivox 发音评测</span>
                 <span className="ml-auto text-xs font-bold text-purple-600">
                   {message.pronunciation.overall_score}/100
                 </span>
               </div>
+
+              {/* Extended scores: stress, intonation, rhythm */}
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                {[
+                  { label: "重音", v: message.pronunciation.stress_score },
+                  { label: "语调", v: message.pronunciation.intonation_score },
+                  { label: "节奏", v: message.pronunciation.rhythm_score },
+                ].map((s) => (
+                  <div key={s.label} className="bg-white/60 rounded-lg py-1.5 text-center">
+                    <div className="text-xs font-bold text-text-primary">{Math.round(s.v)}</div>
+                    <div className="text-[9px] text-text-light">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Phoneme highlights */}
+              {message.pronunciation.phoneme_highlights.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-[10px] text-amber-600 font-medium mb-1">音素问题</p>
+                  <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                    {message.pronunciation.phoneme_highlights.map((issue, i) => (
+                      <p key={i} className="text-[10px] text-amber-700 leading-relaxed">{issue}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Word-level analysis */}
               {message.pronunciation.words.length > 0 && (
@@ -48,7 +102,7 @@ function AnalysisPanel({ message, defaultOpen }: { message: DetailMessage; defau
                             ? "bg-red-100 text-red-700 border border-red-200"
                             : "bg-green-50 text-green-700 border border-green-100"
                           }`}
-                        title={isError ? `${w.error_type}: ${w.word} (${w.accuracy_score})` : "正确"}
+                        title={isError ? `${w.error_type}: ${w.word} (${w.accuracy_score})${w.correction_cn ? ' — ' + w.correction_cn : ''}` : "正确"}
                       >
                         {w.word}
                         {isError && (
@@ -119,6 +173,14 @@ function AnalysisPanel({ message, defaultOpen }: { message: DetailMessage; defau
 function MessageBubble({ message }: { message: DetailMessage }) {
   const isUser = message.role === "user";
   const hasAnalysis = isUser && (message.pronunciation || message.grammar);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+
+  const handlePlayAudio = () => {
+    if (!message.audio_base64 || audioPlaying) return;
+    setAudioPlaying(true);
+    playBase64Audio(message.audio_base64, message.audio_mime_type || "webm")
+      .finally(() => setAudioPlaying(false));
+  };
 
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"} animate-slide-up`}>
@@ -130,6 +192,67 @@ function MessageBubble({ message }: { message: DetailMessage }) {
       )}
 
       <div className={`max-w-[70%]`}>
+        {/* WeChat-style voice message bar */}
+        {isUser && message.audio_base64 && (
+          <div className="flex justify-end mb-1.5">
+            <button
+              onClick={handlePlayAudio}
+              className="group relative flex items-center gap-2 px-3.5 py-2 rounded-2xl rounded-br-sm
+                         bg-white border border-gray-150
+                         hover:bg-green-50 hover:border-green-200
+                         shadow-sm hover:shadow-md
+                         transition-all duration-200 active:scale-[0.97]"
+              style={{ width: getVoiceBarWidth(message.audio_duration || 1) }}
+              title="点击播放录音"
+            >
+              {/* Speaker icon */}
+              <div className={`shrink-0 transition-all duration-200 ${audioPlaying ? "text-green-500 scale-110" : "text-gray-400 group-hover:text-green-500"}`}>
+                {audioPlaying ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" opacity="0.3"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" opacity="0.3"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </svg>
+                )}
+              </div>
+
+              {/* Waveform bars */}
+              <div className="flex items-center gap-[2px] flex-1 justify-center">
+                {[0.6, 1, 0.5, 0.85, 0.4].map((h, i) => (
+                  <span
+                    key={i}
+                    className={`w-[3px] rounded-full bg-green-500 transition-all duration-75
+                      ${audioPlaying ? "animate-voice-wave" : ""}`}
+                    style={{
+                      height: audioPlaying ? `${6 + h * 12}px` : `${4 + h * 6}px`,
+                      animationDelay: audioPlaying ? `${i * 0.12}s` : "0s",
+                      opacity: audioPlaying ? 0.9 : 0.4,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Duration label */}
+              <span className="text-[10px] text-gray-400 font-medium shrink-0 ml-1">
+                {formatVoiceDuration(message.audio_duration || 0)}
+              </span>
+
+              {/* Playing indicator dot */}
+              {audioPlaying && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400" />
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* English content */}
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
           isUser
