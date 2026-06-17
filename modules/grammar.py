@@ -28,7 +28,8 @@ def correct_grammar(
         - ``has_errors``: bool
         - ``original``: str
         - ``corrected``: str
-        - ``errors``: list[dict] with keys type, original_text, corrected_text, explanation
+        - ``errors``: list[dict] with keys type, original_text, corrected_text, explanation, explanation_cn, better_expression
+        - ``expression_improvements``: list[dict] with keys original_phrase, improved_phrase, explanation, explanation_cn
 
     Raises:
         ValueError: If the LLM response cannot be parsed.
@@ -70,4 +71,5 @@ def correct_grammar(
         "original": result.get("original", text),
         "corrected": result.get("corrected", text),
         "errors": result.get("errors", []),
+        "expression_improvements": result.get("expression_improvements", []),
     }

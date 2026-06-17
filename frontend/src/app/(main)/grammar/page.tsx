@@ -117,10 +117,20 @@ export default function GrammarPage() {
   // File upload state
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const dragCounter = useRef(0);  // counter to avoid child-element flicker
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Voice input
   const speech = useSpeechRecognition();
+
+  // Auto-fill recognized text into textarea when speech ends
+  useEffect(() => {
+    if (speech.recognizedText && !speech.isListening) {
+      setText(speech.recognizedText);
+      setResult(null);
+      setActiveHistoryId(null);
+    }
+  }, [speech.recognizedText, speech.isListening]);
 
   const STORAGE_KEY = "grammar_history_v1";
   const SIDEBAR_KEY = "grammar_sidebar_v1";
@@ -365,7 +375,7 @@ export default function GrammarPage() {
                 )}
 
                 {/* File upload */}
-                <input ref={fileInputRef} type="file" accept="image/*,.txt,.md,.csv" onChange={handleFileChange} className="hidden" />
+                <input ref={fileInputRef} type="file" accept="image/*,.txt,.md,.csv,.pdf,.doc,.docx" onChange={handleFileChange} className="hidden" />
                 <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
                              bg-gray-100 text-text-secondary hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
@@ -419,16 +429,18 @@ export default function GrammarPage() {
 
             {/* Drag/drop zone */}
             <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              className={`mt-3 border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
+              onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setDragOver(true); }}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDragLeave={(e) => { e.preventDefault(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDragOver(false); } }}
+              onDrop={(e) => { e.preventDefault(); dragCounter.current = 0; setDragOver(false); handleDrop(e); }}
+              className={`mt-3 border-2 border-dashed rounded-xl p-4 text-center transition-colors cursor-pointer ${
                 dragOver ? "border-[#5B4FCF] bg-[#5B4FCF]/5" : "border-border/60 hover:border-primary/30"
               }`}
+              onClick={() => fileInputRef.current?.click()}
             >
               <div className="flex items-center justify-center gap-3 text-xs text-text-light">
                 <FileText className="w-4 h-4" />
-                <span>拖拽图片 (截图/拍照) 或 .txt 文档到这里自动提取英文文本</span>
+                <span>拖拽图片/文档到这里自动提取英文文本，或点击上传</span>
                 <ImageIcon className="w-4 h-4" />
               </div>
             </div>
