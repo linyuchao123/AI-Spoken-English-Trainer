@@ -77,15 +77,6 @@ LLM_MODELS = {
         "style": "Speak naturally and engagingly with rich, precise vocabulary. "
                  "Be warm and encouraging like a friendly native speaker.",
     },
-    "mimo-v2.5": {
-        "name": "MiMo Vision",
-        "icon": "👁️",
-        "description": "小米多模态模型，支持图片识别",
-        "provider": "mimo",
-        "model_id": "mimo-v2.5",
-        "style": "Speak clearly and helpfully with straightforward language. "
-                 "Focus on being accurate and practical in your responses.",
-    },
 }
 
 # ============================================================

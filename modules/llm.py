@@ -130,9 +130,12 @@ def generate_reply(
         model=cfg["model_id"],
         messages=messages,
         temperature=0.7,
-        max_tokens=200,
+        max_tokens=1000,
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        content = "Could you tell me more about that?"
+    return content.strip()
 
 
 # ============================================================
@@ -191,6 +194,10 @@ def generate_opening(
             {"role": "user", "content": "Start the conversation now."},
         ],
         temperature=0.9,  # higher for creative variety
-        max_tokens=80,
+        max_tokens=300,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        # Fallback for reasoning models (e.g. MiMo) that consume all tokens on thinking
+        content = prompt_config.get("first_message", "Hello! Let's get started.")
+    return content.strip()

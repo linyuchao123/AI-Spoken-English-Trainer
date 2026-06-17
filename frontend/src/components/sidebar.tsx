@@ -181,7 +181,7 @@ export default function Sidebar() {
           {/* Model Selection */}
           <div className="space-y-2.5">
             <SectionTitle icon={<Bot className="w-3.5 h-3.5" />} text="AI 模型" />
-            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/3">
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-white/3">
               {models.map((m) => {
                 const isActive = currentModel === m.key;
                 return (
