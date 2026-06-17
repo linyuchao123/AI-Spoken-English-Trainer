@@ -39,30 +39,66 @@ def correct_grammar(
 
     prompt = GRAMMAR_CORRECTION_PROMPT.format(user_text=text)
 
+    base_max_tokens = max(4000, len(text) * GRAMMAR_MAX_TOKENS_MULTIPLIER)
+    raw = ""
+
+    # First attempt (may fail for reasoning models that exhaust tokens on thinking)
     response = client.chat.completions.create(
         model=cfg["model_id"],
         messages=[
             {"role": "system", "content": "You are a grammar checking assistant. Respond ONLY with valid JSON, no extra text."},
             {"role": "user", "content": prompt},
         ],
-        temperature=0.1,  # low temperature for deterministic corrections
-        max_tokens=max(500, len(text) * GRAMMAR_MAX_TOKENS_MULTIPLIER),
+        temperature=0.1,
+        max_tokens=base_max_tokens,
     )
+    raw = (response.choices[0].message.content or "").strip()
 
-    raw = response.choices[0].message.content.strip()
+    # If content is empty (reasoning model consumed all tokens), retry with much higher limit
+    if not raw:
+        response = client.chat.completions.create(
+            model=cfg["model_id"],
+            messages=[
+                {"role": "system", "content": "You are a grammar checking assistant. Respond ONLY with valid JSON, no extra text."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=base_max_tokens * 2,
+        )
+        raw = (response.choices[0].message.content or "").strip()
 
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1]
+    if not raw:
+        raise ValueError(
+            f"LLM returned empty response (likely a reasoning model exhausted tokens). "
+            f"Please try a different model (e.g. DeepSeek or GPT-4o) for grammar checking."
+        )
+
+    # ── Robust JSON extraction ──
+    # 1. Strip markdown code fences (```json ... ```, ``` ... ```, etc.)
+    import re
+    fence_match = re.match(r"```(?:json|JSON)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        raw = fence_match.group(1).strip()
+    elif raw.startswith("```"):
+        # Simple case: starts with ``` but no closing fence found by regex
+        lines = raw.split("\n")
+        if len(lines) > 1:
+            raw = "\n".join(lines[1:])  # drop first line (``` or ```json)
         if raw.endswith("```"):
             raw = raw[:-3]
         raw = raw.strip()
 
+    # 2. Try to find JSON object in the response (handles extra text before/after)
+    json_match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if json_match:
+        raw = json_match.group(0)
+
+    # 3. Parse
     try:
         result = json.loads(raw)
     except json.JSONDecodeError:
         raise ValueError(
-            f"Failed to parse grammar correction response as JSON. Raw: {raw[:200]}"
+            f"Failed to parse grammar correction response as JSON. Raw: {raw[:500]}"
         )
 
     # Normalise keys

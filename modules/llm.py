@@ -18,6 +18,8 @@ from config.settings import (
     OPENAI_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
+    MIMO_API_KEY,
+    MIMO_BASE_URL,
     LLM_MODELS,
 )
 from config.prompts import SCENE_PROMPTS
@@ -50,6 +52,14 @@ def get_llm_client(model_key: str) -> OpenAI:
                 "Set it in your .env file or environment variables."
             )
         return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+
+    if provider == "mimo":
+        if not MIMO_API_KEY:
+            raise ValueError(
+                "MIMO_API_KEY is not configured. "
+                "Set it in your .env file or environment variables."
+            )
+        return OpenAI(api_key=MIMO_API_KEY, base_url=MIMO_BASE_URL)
 
     # provider == "openai" (or future providers defaulting to OpenAI)
     if not OPENAI_API_KEY:
@@ -120,9 +130,12 @@ def generate_reply(
         model=cfg["model_id"],
         messages=messages,
         temperature=0.7,
-        max_tokens=200,
+        max_tokens=1000,
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        content = "Could you tell me more about that?"
+    return content.strip()
 
 
 # ============================================================
@@ -181,6 +194,10 @@ def generate_opening(
             {"role": "user", "content": "Start the conversation now."},
         ],
         temperature=0.9,  # higher for creative variety
-        max_tokens=80,
+        max_tokens=300,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        # Fallback for reasoning models (e.g. MiMo) that consume all tokens on thinking
+        content = prompt_config.get("first_message", "Hello! Let's get started.")
+    return content.strip()
