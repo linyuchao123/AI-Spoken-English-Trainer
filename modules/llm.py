@@ -18,6 +18,8 @@ from config.settings import (
     OPENAI_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
+    MIMO_API_KEY,
+    MIMO_BASE_URL,
     LLM_MODELS,
 )
 from config.prompts import SCENE_PROMPTS
@@ -50,6 +52,14 @@ def get_llm_client(model_key: str) -> OpenAI:
                 "Set it in your .env file or environment variables."
             )
         return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+
+    if provider == "mimo":
+        if not MIMO_API_KEY:
+            raise ValueError(
+                "MIMO_API_KEY is not configured. "
+                "Set it in your .env file or environment variables."
+            )
+        return OpenAI(api_key=MIMO_API_KEY, base_url=MIMO_BASE_URL)
 
     # provider == "openai" (or future providers defaulting to OpenAI)
     if not OPENAI_API_KEY:

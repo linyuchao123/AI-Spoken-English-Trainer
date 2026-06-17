@@ -21,6 +21,10 @@ AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 CHIVOX_API_KEY = os.getenv("CHIVOX_API_KEY", "")
 CHIVOX_MCP_URL = os.getenv("CHIVOX_MCP_URL", "https://mcp.cloud.chivox.com")
 
+# Xiaomi MiMo (小米大模型) — OpenAI-compatible, supports vision
+MIMO_API_KEY = os.getenv("MIMO_API_KEY", "")
+MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"
+
 # iFlytek (科大讯飞) ASR
 XF_APPID = os.getenv("XF_APPID", "")
 XF_API_KEY = os.getenv("XF_API_KEY", "")
@@ -63,6 +67,24 @@ LLM_MODELS = {
         "model_id": "deepseek-chat",
         "style": "Speak practically and straightforwardly with clear explanations. "
                  "Use a helpful, instructional tone — like a patient teacher guiding a student.",
+    },
+    "mimo-v2.5-pro": {
+        "name": "MiMo Pro",
+        "icon": "📱",
+        "description": "小米旗舰文本模型，推理能力强",
+        "provider": "mimo",
+        "model_id": "mimo-v2.5-pro",
+        "style": "Speak naturally and engagingly with rich, precise vocabulary. "
+                 "Be warm and encouraging like a friendly native speaker.",
+    },
+    "mimo-v2.5": {
+        "name": "MiMo Vision",
+        "icon": "👁️",
+        "description": "小米多模态模型，支持图片识别",
+        "provider": "mimo",
+        "model_id": "mimo-v2.5",
+        "style": "Speak clearly and helpfully with straightforward language. "
+                 "Focus on being accurate and practical in your responses.",
     },
 }
 

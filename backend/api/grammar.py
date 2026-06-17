@@ -185,58 +185,85 @@ async def _extract_docx_text(content: bytes, filename: str) -> str:
 
 
 async def _vision_extract(data_url: str) -> str:
-    """Use LLM vision to extract English text from an image."""
+    """Use LLM vision to extract English text from an image.
+    
+    Priority: MiMo (Xiaomi) → OpenAI (fallback).
+    """
     import asyncio
+    from config.settings import MIMO_API_KEY, MIMO_BASE_URL, OPENAI_API_KEY
 
     prompt = """Please extract ALL English text visible in this image.
 Return ONLY the extracted English text, preserving line breaks and paragraph structure.
 Do not add any explanations, translations, or extra commentary.
 If no English text is found, respond with 'No English text found.'"""
 
-    async def _try_deepseek():
-        from config.settings import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
-        if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY.startswith("sk-your-"):
-            raise RuntimeError("No DeepSeek key")
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-        resp = await client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-            max_tokens=500, temperature=0.1,
-        )
-        return resp.choices[0].message.content or ""
+    from openai import AsyncOpenAI
 
-    async def _try_openai():
-        from config.settings import OPENAI_API_KEY
-        if not OPENAI_API_KEY or OPENAI_API_KEY.startswith("sk-your-"):
-            raise RuntimeError("No OpenAI key")
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    # ── Try MiMo first (free, supports vision) ──
+    if MIMO_API_KEY and not MIMO_API_KEY.startswith("sk-your-"):
+        try:
+            client = AsyncOpenAI(
+                api_key=MIMO_API_KEY,
+                base_url=MIMO_BASE_URL,
+                timeout=30.0,
+                max_retries=1,
+            )
+            resp = await client.chat.completions.create(
+                model="mimo-v2.5",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": prompt},
+                    ],
+                }],
+                max_tokens=500,
+                temperature=0.1,
+            )
+            return resp.choices[0].message.content or ""
+        except Exception:
+            pass  # fall through to OpenAI
+
+    # ── Fallback: OpenAI GPT-4o-mini ──
+    if not OPENAI_API_KEY or OPENAI_API_KEY.startswith("sk-your-"):
+        raise HTTPException(
+            status_code=400,
+            detail="图片OCR需要配置 API Key。请在 .env 中设置 MIMO_API_KEY（小米 MiMo，推荐）或 OPENAI_API_KEY。"
+        )
+
+    try:
+        client = AsyncOpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=30.0,
+            max_retries=1,
+        )
         resp = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
                     {"type": "text", "text": prompt},
                 ],
             }],
-            max_tokens=500, temperature=0.1,
+            max_tokens=500,
+            temperature=0.1,
         )
         return resp.choices[0].message.content or ""
-
-    try:
-        return await _try_deepseek()
-    except Exception:
-        pass
-
-    try:
-        return await _try_openai()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OCR extraction failed: {str(exc)}")
+        err_msg = str(exc)
+        if "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
+            raise HTTPException(
+                status_code=502,
+                detail="图片OCR超时：请尝试上传更小的图片，或检查网络连接。"
+            )
+        elif "api_key" in err_msg.lower() or "auth" in err_msg.lower():
+            raise HTTPException(
+                status_code=502,
+                detail="API Key 无效，请检查 .env 中的 MIMO_API_KEY 或 OPENAI_API_KEY。"
+            )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail=f"图片OCR失败: {err_msg}"
+            )
