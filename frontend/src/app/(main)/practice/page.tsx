@@ -9,7 +9,7 @@ import {
   Mic, Send, MicOff, Sparkles, Volume2, Bot, User,
   MessageSquare, StopCircle, Globe, ChevronDown, ChevronUp,
   Languages, RefreshCw, AlertCircle, ImageOff, CheckCircle2, Play,
-  BarChart3, Target, Zap,
+  BarChart3, Target, Zap, PlayCircle,
 } from "lucide-react";
 import { useAudioRecorder } from "../pronunciation/useAudioRecorder";
 
@@ -123,14 +123,35 @@ function useSpeechRecognition() {
 }
 
 /* ──────────── TTS Audio Player ──────────── */
-function playBase64Audio(base64: string, format = "mp3"): Promise<void> {
+function playBase64Audio(base64: string, formatOrMime = "mp3"): Promise<void> {
   return new Promise((resolve) => {
-    const mime = format === "mp3" ? "audio/mpeg" : `audio/${format}`;
+    let mime: string;
+    if (formatOrMime.includes("/")) {
+      // Full MIME type like "audio/webm;codecs=opus"
+      mime = formatOrMime.split(";")[0];
+    } else {
+      mime = formatOrMime === "mp3" ? "audio/mpeg" : `audio/${formatOrMime}`;
+    }
     const audio = new Audio(`data:${mime};base64,${base64}`);
     audio.onended = () => resolve();
     audio.onerror = () => resolve();
     audio.play().catch(() => resolve());
   });
+}
+
+/* ──────────── Voice bar helpers ──────────── */
+
+/** Format seconds → "12''" style duration label */
+function formatVoiceDuration(sec: number): string {
+  if (!sec || sec <= 0) return "1''";
+  return `${Math.round(sec)}''`;
+}
+
+/** Map duration (seconds) → bar width (px), min 90 max 240 */
+function getVoiceBarWidth(sec: number): number {
+  if (!sec || sec <= 0) return 100;
+  // Logarithmic-ish: rapid growth for 1-10s, slower beyond
+  return Math.min(240, Math.max(90, 70 + sec * 14));
 }
 
 /* ──────────── Recording Waveform ──────────── */
@@ -289,6 +310,7 @@ function FeedbackCard({ feedback }: { feedback: RealtimeFeedback }) {
    ══════════════════════════════════════════════════════════════ */
 function PronunciationMiniCard({ pronunciation }: { pronunciation: PronunciationResult }) {
   const score = pronunciation.overall_score;
+  const [expanded, setExpanded] = useState(false);
   const color =
     score >= 85 ? "#10b981" :
     score >= 70 ? "#f59e0b" :
@@ -298,6 +320,9 @@ function PronunciationMiniCard({ pronunciation }: { pronunciation: Pronunciation
     score >= 80 ? "Very Good" :
     score >= 70 ? "Good" :
     score >= 60 ? "Fair" : "Needs Improvement";
+
+  const hasPhonemeIssues = pronunciation.phoneme_highlights.length > 0;
+  const hasWordErrors = pronunciation.words.some((w) => w.error_type !== "None");
 
   return (
     <div className="mt-2 animate-fade-in">
@@ -320,7 +345,7 @@ function PronunciationMiniCard({ pronunciation }: { pronunciation: Pronunciation
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <Target className="w-3 h-3 text-sky-400" />
-              <span className="text-xs text-sky-300 font-semibold">发音评分 · {grade}</span>
+              <span className="text-xs text-sky-300 font-semibold">Chivox 发音评分 · {grade}</span>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[10px] text-white/50">准确度 {Math.round(pronunciation.accuracy_score)}</span>
@@ -329,13 +354,95 @@ function PronunciationMiniCard({ pronunciation }: { pronunciation: Pronunciation
               <span className="text-[10px] text-white/30">·</span>
               <span className="text-[10px] text-white/50">完整度 {Math.round(pronunciation.completeness_score)}</span>
             </div>
-            {pronunciation.phoneme_highlights.length > 0 && (
+            {hasPhonemeIssues && (
               <p className="text-[10px] text-amber-400/70 mt-1 line-clamp-1">
                 ⚠ {pronunciation.phoneme_highlights[0]}
               </p>
             )}
           </div>
+
+          {/* Expand toggle */}
+          {(hasPhonemeIssues || hasWordErrors) && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="shrink-0 text-white/30 hover:text-white/60 transition-colors"
+            >
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
+
+        {/* Expanded phoneme-level details */}
+        {expanded && (
+          <div className="mt-3 pt-3 border-t border-white/8 space-y-2 animate-fade-in">
+            {/* Extended scores: stress, intonation, rhythm */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "重音", score: pronunciation.stress_score },
+                { label: "语调", score: pronunciation.intonation_score },
+                { label: "节奏", score: pronunciation.rhythm_score },
+              ].map((d) => (
+                <div key={d.label} className="text-center bg-white/5 rounded-lg py-1.5">
+                  <div className="text-xs font-bold text-white/70">{Math.round(d.score)}</div>
+                  <div className="text-[9px] text-white/30">{d.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Phoneme highlights */}
+            {hasPhonemeIssues && (
+              <div>
+                <p className="text-[10px] text-amber-400/60 mb-1.5 font-medium">音素问题详情</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {pronunciation.phoneme_highlights.map((issue, i) => (
+                    <p key={i} className="text-[10px] text-amber-300/70 leading-relaxed">
+                      {issue}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Word-level errors */}
+            {hasWordErrors && (
+              <div>
+                <p className="text-[10px] text-red-400/60 mb-1.5 font-medium">单词级发音问题</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {pronunciation.words
+                    .filter((w) => w.error_type !== "None")
+                    .map((w, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium
+                                   bg-red-500/10 text-red-400 border border-red-500/20"
+                        title={w.correction_cn || w.error_type}
+                      >
+                        {w.word}
+                        <span className="text-red-400/60">({Math.round(w.accuracy_score)})</span>
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Correct words */}
+            {pronunciation.words.some((w) => w.error_type === "None") && (
+              <div className="flex flex-wrap gap-1.5">
+                {pronunciation.words
+                  .filter((w) => w.error_type === "None")
+                  .map((w, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium
+                                 bg-emerald-500/8 text-emerald-400/70 border border-emerald-500/15"
+                    >
+                      {w.word}
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -361,11 +468,79 @@ function ChatBubble({
   pronunciation?: PronunciationResult | null;
 }) {
   const isUser = message.role === "user";
+  const [audioPlaying, setAudioPlaying] = useState(false);
+
+  const handlePlayUserAudio = () => {
+    if (!message.audio_base64 || audioPlaying) return;
+    setAudioPlaying(true);
+    playBase64Audio(message.audio_base64, message.audio_mime_type || "webm")
+      .finally(() => setAudioPlaying(false));
+  };
 
   if (isUser) {
     return (
       <div className="flex justify-end gap-3 animate-slide-up">
         <div className="max-w-[72%]">
+          {/* WeChat-style voice message bar */}
+          {message.audio_base64 && (
+            <div className="flex justify-end mb-1.5">
+              <button
+                onClick={handlePlayUserAudio}
+                className="group relative flex items-center gap-2 px-3.5 py-2 rounded-2xl rounded-br-sm
+                           bg-gradient-to-r from-[#4A3EC4] to-[#6B5DE0]
+                           hover:from-[#5548D5] hover:to-[#7C6FF7]
+                           shadow-md shadow-indigo-500/20
+                           transition-all duration-200 active:scale-[0.97]"
+                style={{ width: getVoiceBarWidth(message.audio_duration || 1) }}
+                title="点击播放录音"
+              >
+                {/* Speaker icon */}
+                <div className={`shrink-0 transition-all duration-200 ${audioPlaying ? "text-emerald-300 scale-110" : "text-white/70 group-hover:text-white"}`}>
+                  {audioPlaying ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" opacity="0.3"/>
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" opacity="0.3"/>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                  )}
+                </div>
+
+                {/* Waveform bars */}
+                <div className="flex items-center gap-[2px] flex-1 justify-center">
+                  {[0.6, 1, 0.5, 0.85, 0.4].map((h, i) => (
+                    <span
+                      key={i}
+                      className={`w-[3px] rounded-full bg-white/70 transition-all duration-75
+                        ${audioPlaying ? "animate-voice-wave" : ""}`}
+                      style={{
+                        height: audioPlaying ? `${6 + h * 12}px` : `${4 + h * 6}px`,
+                        animationDelay: audioPlaying ? `${i * 0.12}s` : "0s",
+                        opacity: audioPlaying ? 0.9 : 0.55,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Duration label */}
+                <span className="text-[10px] text-white/50 font-medium shrink-0 ml-1">
+                  {formatVoiceDuration(message.audio_duration || 0)}
+                </span>
+
+                {/* Playing indicator dot */}
+                {audioPlaying && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400" />
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
           <div className="px-5 py-3 rounded-2xl rounded-br-md text-sm leading-relaxed
                           bg-gradient-to-br from-[#5B4FCF] to-[#7C6FF7] text-white
                           shadow-lg shadow-indigo-500/20">
@@ -655,6 +830,7 @@ export default function PracticePage() {
   const speech = useSpeechRecognition();
   const audio = useAudioRecorder();
   const audioBase64Ref = useRef<string | null>(null);
+  const recordingStartRef = useRef<number>(0);  // track when mic started for duration
   const wasRecordingAudioRef = useRef(false);  // tracks whether mic was used (vs. text-only)
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -770,9 +946,10 @@ export default function PracticePage() {
 
     // Capture current audio base64 (from ref, which is synced with state)
     const audioB64 = audioBase64Ref.current || undefined;
+    const audioDur = audioB64 ? Math.round((Date.now() - recordingStartRef.current) / 1000 * 10) / 10 : 0;
 
     try {
-      const { data } = await sessionsApi.sendMessage(activeSession.id, t, audioB64);
+      const { data } = await sessionsApi.sendMessage(activeSession.id, t, audioB64, audioDur);
       const msgs = data.messages || [];
       setMessages(msgs.map((m) => ({ ...m })));
 
@@ -1065,7 +1242,7 @@ export default function PracticePage() {
             <button
               onClick={speech.isListening
                 ? () => { speech.stop(); audio.stop(); }
-                : () => { speech.start(); audio.start().catch(() => {}); }
+                : () => { recordingStartRef.current = Date.now(); speech.start(); audio.start().catch(() => {}); }
               }
               disabled={sending}
               className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white

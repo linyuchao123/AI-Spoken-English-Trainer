@@ -131,6 +131,9 @@ export interface Message {
   role: "user" | "ai";
   content: string;
   created_at: string | null;
+  audio_base64?: string;
+  audio_mime_type?: string;
+  audio_duration?: number;
 }
 
 // Session detail (for history review)
@@ -139,6 +142,10 @@ export interface DetailPronunciation {
   accuracy_score: number;
   fluency_score: number;
   completeness_score: number;
+  stress_score: number;
+  intonation_score: number;
+  rhythm_score: number;
+  phoneme_highlights: string[];
   words: WordScore[];
 }
 
@@ -158,6 +165,9 @@ export interface DetailMessage {
   translation_cn: string;
   pronunciation: DetailPronunciation | null;
   grammar: DetailGrammar | null;
+  audio_base64?: string;
+  audio_mime_type?: string;
+  audio_duration?: number;
 }
 
 export interface SessionDetail {
@@ -203,10 +213,11 @@ export const sessionsApi = {
   getMessages: (sessionId: number) =>
     api.get<Message[]>(`/api/sessions/${sessionId}/messages`),
 
-  sendMessage: (sessionId: number, content: string, audioBase64?: string) =>
+  sendMessage: (sessionId: number, content: string, audioBase64?: string, audioDuration?: number) =>
     api.post<SendMessageResponse>(`/api/sessions/${sessionId}/messages`, {
       content,
       audio_base64: audioBase64 || "",
+      audio_duration: audioDuration || 0,
     }),
 
   getDetail: (sessionId: number) =>
@@ -255,7 +266,10 @@ export const grammarApi = {
   extractText: (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return api.post<ExtractTextResult>("/api/grammar/extract-text", form);
+    // Use a separate instance without JSON Content-Type for file uploads
+    return axios.post<ExtractTextResult>(`${API_BASE}/api/grammar/extract-text`, form, {
+      withCredentials: true,
+    });
   },
 };
 
@@ -362,6 +376,8 @@ export interface SentenceAnalysisItem {
   pronunciation_issues: string[];
   grammar_issues: string[];
   expression_improvements: string[];
+  chivox_score: number;
+  chivox_phoneme_issues: string[];
 }
 
 export interface ReportData {

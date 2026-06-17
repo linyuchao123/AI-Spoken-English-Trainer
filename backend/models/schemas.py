@@ -96,6 +96,7 @@ class SessionResponse(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1)
     audio_base64: str = Field(default="", description="Optional: base64-encoded audio for Chivox pronunciation assessment")
+    audio_duration: float = Field(default=0, description="Optional: audio duration in seconds")
 
 
 class MessageResponse(BaseModel):
@@ -103,6 +104,9 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: Optional[str] = None
+    audio_base64: str = ""
+    audio_mime_type: str = ""
+    audio_duration: float = 0
 
 
 # ============================================================
@@ -214,6 +218,8 @@ class SentenceAnalysisItem(BaseModel):
     pronunciation_issues: list[str] = []
     grammar_issues: list[str] = []
     expression_improvements: list[str] = []
+    chivox_score: float = 0
+    chivox_phoneme_issues: list[str] = []
 
 
 class ScoreBreakdown(BaseModel):
@@ -262,6 +268,10 @@ class DetailPronunciation(BaseModel):
     accuracy_score: float = 0
     fluency_score: float = 0
     completeness_score: float = 0
+    stress_score: float = 0
+    intonation_score: float = 0
+    rhythm_score: float = 0
+    phoneme_highlights: list[str] = []
     words: list[WordScoreResponse] = []
 
 
@@ -281,6 +291,9 @@ class DetailMessage(BaseModel):
     translation_cn: str = ""
     pronunciation: Optional[DetailPronunciation] = None
     grammar: Optional[DetailGrammar] = None
+    audio_base64: str = ""
+    audio_mime_type: str = ""
+    audio_duration: float = 0
 
 
 class SessionDetailResponse(BaseModel):

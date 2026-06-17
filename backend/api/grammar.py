@@ -78,6 +78,16 @@ async def extract_text_from_file(file: UploadFile = File(...)):
             text = content.decode("latin-1", errors="replace")
         return ExtractTextResponse(text=text.strip(), source="document")
 
+    # --- PDF files ---
+    if filename.endswith(".pdf") or "pdf" in content_type:
+        extracted = await _extract_pdf_text(content)
+        return ExtractTextResponse(text=extracted.strip(), source="document")
+
+    # --- DOC/DOCX files ---
+    if filename.endswith((".doc", ".docx")) or "word" in content_type or "document" in content_type:
+        extracted = await _extract_docx_text(content, filename)
+        return ExtractTextResponse(text=extracted.strip(), source="document")
+
     # --- Image files: use LLM vision to extract text ---
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
     mime_map = {
@@ -95,7 +105,7 @@ async def extract_text_from_file(file: UploadFile = File(...)):
     if not is_image:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type. Supported: images (.png/.jpg/.webp) and text (.txt/.md/.csv).",
+            detail=f"Unsupported file type. Supported: images (.png/.jpg/.webp), PDF, Word (.doc/.docx), and text (.txt/.md/.csv).",
         )
 
     # Call LLM vision to extract text
@@ -104,6 +114,74 @@ async def extract_text_from_file(file: UploadFile = File(...)):
 
     extracted = await _vision_extract(data_url)
     return ExtractTextResponse(text=extracted.strip(), source="image")
+
+
+async def _extract_pdf_text(content: bytes) -> str:
+    """Extract text from PDF file content."""
+    import asyncio
+    try:
+        import io
+        # Try PyPDF2 / pypdf first (lightweight)
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(content))
+            texts = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    texts.append(t)
+            return "\n".join(texts) if texts else "No text found in PDF."
+        except ImportError:
+            pass
+        # Fallback: try PyPDF2
+        try:
+            from PyPDF2 import PdfReader as PdfReader2
+            reader = PdfReader2(io.BytesIO(content))
+            texts = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    texts.append(t)
+            return "\n".join(texts) if texts else "No text found in PDF."
+        except ImportError:
+            pass
+        raise RuntimeError("No PDF library available. Please install pypdf or PyPDF2.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
+
+
+async def _extract_docx_text(content: bytes, filename: str) -> str:
+    """Extract text from DOCX file content."""
+    try:
+        import io
+        # Try python-docx for .docx files
+        try:
+            from docx import Document
+            doc = Document(io.BytesIO(content))
+            texts = [p.text for p in doc.paragraphs if p.text.strip()]
+            return "\n".join(texts) if texts else "No text found in document."
+        except ImportError:
+            pass
+        # Fallback for .doc (old format): try antiword or textract
+        if filename.endswith(".doc"):
+            try:
+                import subprocess, tempfile, os
+                with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as f:
+                    f.write(content)
+                    tmp_path = f.name
+                try:
+                    result = subprocess.run(["antiword", tmp_path], capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0 and result.stdout.strip():
+                        return result.stdout.strip()
+                finally:
+                    os.unlink(tmp_path)
+            except Exception:
+                pass
+        raise RuntimeError("No DOCX library available. Please install python-docx.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Document extraction failed: {str(e)}")
 
 
 async def _vision_extract(data_url: str) -> str:
