@@ -23,28 +23,28 @@ const FEATURES = [
   {
     icon: MessageSquare,
     title: "沉浸式场景对话",
-    desc: "职场面试、餐厅点餐、商务会议三大真实场景，AI 角色扮演陪练",
+    desc: "职场面试、餐厅点餐、商务会议三大真实场景，AI 角色扮演陪练，支持实时流式语音交互",
     color: "from-indigo-500 to-purple-600",
     bg: "bg-indigo-500/10",
   },
   {
     icon: Target,
     title: "智能发音评测",
-    desc: "基于 LLM 的精准发音分析，逐词评分，即时纠音反馈",
+    desc: "驰声(Chivox)音素级评测引擎，逐词逐音精准打分，中英双语纠音指导",
     color: "from-emerald-500 to-teal-600",
     bg: "bg-emerald-500/10",
   },
   {
     icon: Wrench,
     title: "语法实时纠错",
-    desc: "AI 语法引擎检查每句话，中英双语解释，理解零障碍",
+    desc: "多模型 AI 语法引擎检查每句话，原句对比 + 优化建议 + 中英双语解释",
     color: "from-amber-500 to-orange-600",
     bg: "bg-amber-500/10",
   },
   {
     icon: BarChart3,
     title: "课后学习报告",
-    desc: "会话结束自动生成多维评估报告，跟踪进步轨迹",
+    desc: "会话结束自动生成三维度评估报告（发音·语法·表达），中英双语反馈，跟踪进步轨迹",
     color: "from-rose-500 to-pink-600",
     bg: "bg-rose-500/10",
   },
@@ -53,7 +53,7 @@ const FEATURES = [
 const STATS = [
   { icon: Globe, value: "3", label: "真实场景" },
   { icon: Zap, value: "3", label: "难度档位" },
-  { icon: Sparkles, value: "3", label: "AI 模型" },
+  { icon: Sparkles, value: "4+", label: "AI 引擎" },
   { icon: Users, value: "24/7", label: "随时练习" },
 ];
 
@@ -112,8 +112,8 @@ export default function HomePage() {
 
           {/* Subtitle */}
           <p className="text-center text-white/50 text-lg md:text-xl max-w-2xl mx-auto mb-10 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-            与 AI 进行沉浸式英语对话练习 —— 多场景模拟、实时发音评估、
-            精准语法纠正，让每一次开口都有进步。
+            与 AI 进行沉浸式英语对话练习 —— 多场景模拟、音素级发音评测、
+            语法实时纠错、课后双语报告，让每一次开口都有进步。
           </p>
 
           {/* CTA Buttons */}
@@ -235,7 +235,7 @@ export default function HomePage() {
                 准备好了吗？
               </h2>
               <p className="text-white/50 text-lg mb-8 max-w-lg mx-auto">
-                选择场景和难度，AI 陪练即刻上线。每一次对话都是一次进步。
+                选择场景和难度，AI 陪练即刻上线。音素级发音评测、实时语法纠错、课后双语报告，每一次对话都是一次进步。
               </p>
               <Link
                 href="/practice"

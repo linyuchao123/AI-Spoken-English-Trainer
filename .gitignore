@@ -39,6 +39,11 @@ Thumbs.db
 
 # Logs
 *.log
+*_log.txt
+*_err.txt
+
+# LangGraph
+.langgraph_api/
 
 # Node.js / Next.js
 node_modules/
