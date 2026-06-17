@@ -45,23 +45,24 @@ AI英语口语陪练是一个面向英语学习者的智能口语练习平台。
 |------|------|
 | **场景选择** | 3个真实场景（职场面试 / 餐厅点餐 / 商务会议），每个场景配有专属AI人设 |
 | **难度档位** | 每个场景支持初级/中级/高级3个难度，AI对话内容随难度自适应调整 |
-| **实时语音对话** | 浏览器麦克风收音，流式语音识别，端到端低延迟语音交互，TTS 语音合成回放 |
-| **发音评测打分** | 基于Azure发音评测API，输出0-100分，标注准确度/流利度/完整度 |
-| **语法纠错** | 自动检测语法/用词/句式错误，展示原句+优化句+错误解释（中英双语） |
-| **课后量化报告** | 一键生成多维度可视化学习报告（6维评分、发音趋势、强弱项分析、提升建议） |
-| **多模型支持** | 支持 OpenAI GPT-4o / GPT-4o-mini / DeepSeek 三模型自由切换，AI 对话风格随模型自适应 |
+| **实时语音对话** | 浏览器麦克风收音，低延迟语音交互，TTS 语音合成自动回放，支持原始语音回放 |
+| **发音评测打分** | 驰声(Chivox)音素级评测引擎，输出0-100分，逐词逐音精准定位发音问题，中英双语纠音指导 |
+| **语法纠错** | 多模型 AI 语法引擎自动检测8类错误，展示原句+优化句+中英双语解释 |
+| **课后量化报告** | 一键生成三维度评估报告（发音·语法·表达），六维评分、逐句分析、双语强弱项诊断 |
+| **多模型支持** | 支持 MiMo Pro / GPT-4o / DeepSeek 多模型自由切换，AI 对话风格随模型自适应 |
 | **语音合成 (TTS)** | Edge TTS (免费，零配置) → Azure Speech → OpenAI TTS 三级自动降级，支持多音色与语速调节 |
 
 ### 项目特色
 
 - 🎯 **沉浸式场景对话** — 3 个真实场景，每个配有专属 AI 人设与视觉背景。AI 根据场景角色（HR 面试官 / 餐厅服务员 / 会议主持人）调整语调和对话策略
-- 🧠 **三模型智能切换** — GPT-4o（自然流畅）、GPT-4o-mini（轻量快速）、DeepSeek（教学风格）三种模型对应三种对话风格，一键切换
+- 🧠 **四模型智能切换** — MiMo Pro（深度推理）、GPT-4o（自然流畅）、DeepSeek（教学风格）多模型对应多种对话风格，一键切换
 - 🔊 **免费 TTS 零门槛** — Edge TTS 完全免费、无需 API Key，开箱即用；Azure / OpenAI TTS 作为高质量备选自动降级
-- 📊 **六维综合评估** — 课后报告覆盖语法、词汇、流利度、表达、自然度、情感六个维度，附带逐句分析与强弱项诊断
-- 🎤 **多入口语音输入** — 练习页、发音评测页、语法纠错页、独立 ASR 页均支持浏览器语音识别，语音不可用时提供手动输入替代
+- 📊 **三维度双语报告** — 课后报告覆盖发音·语法·表达三个维度，六维评分 + 逐句分析 + 中英双语强弱项诊断
+- 🎤 **多入口语音输入** — 练习页、发音评测页、语法纠错页、独立 ASR 页均支持麦克风收音，语音不可用时提供手动输入替代
 - 🔗 **页面联动跳转** — ASR 识别结果可一键跳转语法纠错 / 发音评测；发音评测结果可跳转 TTS 收听标准发音
 - 🌐 **中英双语反馈** — 语法纠错、发音提示、学习报告全部提供英文 + 中文双语解释
 - 🔐 **双通道认证** — 支持邮箱密码注册登录 + GitHub OAuth 一键登录
+- 🤖 **LangGraph 双 Agent 工作流** — 实时反馈 Agent + 课后评测 Agent，LangSmith 全链路可视化追踪
 
 ---
 
@@ -73,11 +74,12 @@ AI英语口语陪练是一个面向英语学习者的智能口语练习平台。
 | UI 组件库 | **Tailwind CSS** + Lucide Icons | 原子化 CSS 框架 + 图标库 |
 | 状态管理 | **Zustand** | 轻量级全局状态管理 |
 | 后端框架 | **FastAPI** + Uvicorn | Python 异步 Web 框架 |
+| AI 工作流 | **LangGraph** + LangChain + LangSmith | 双 Agent 工作流（实时反馈 + 课后评测），可视化追踪 |
 | 认证 | **JWT** HTTP-only Cookie + GitHub OAuth | 无状态身份认证 + 第三方登录 |
 | 数据库 | **SQLite** (WAL 模式) | 本地轻量数据库，6 张核心表 |
-| 语音识别 (ASR) | **OpenAI Whisper API** | 英文语音转文字 |
-| 大语言模型 (LLM) | **OpenAI GPT-4o / GPT-4o-mini / DeepSeek** | 场景化英文对话，风格随模型自适应 |
-| 发音评测 | **Azure Pronunciation Assessment** | 音素级发音评分 |
+| 语音识别 (ASR) | **科大讯飞** + Web Speech API | 高准确率流式语音识别（支持 en_US 等 4 语种） |
+| 大语言模型 (LLM) | **MiMo Pro / GPT-4o / DeepSeek** | 四模型路由，场景化英文对话，风格随模型自适应 |
+| 发音评测 | **驰声 (Chivox)** 音素级评测 | 真实音频分析，逐词逐音精准打分 |
 | 语音合成 (TTS) | **Edge TTS** (默认，免费零配置) | Azure Speech TTS / OpenAI TTS 作为降级备选 |
 | 数据可视化 | **自定义 SVG 组件** | 评分圆环、维度进度条、词级分析卡片 |
 
@@ -108,13 +110,13 @@ Next.js App Router 支持服务端组件和布局嵌套，方便实现认证路�
 </details>
 
 <details>
-<summary><strong>为什么选择 GPT-4o + GPT-4o-mini + DeepSeek 三模型组合？</strong></summary>
+<summary><strong>为什么选择 MiMo Pro + GPT-4o + DeepSeek 多模型组合？</strong></summary>
 
+- **MiMo Pro**：小米深度推理模型，逻辑严谨、善于追问，适合复杂话题讨论，提供免费额度
 - **GPT-4o**：作为主力模型，对话自然度最高，适合追求沉浸式练习体验的用户
-- **GPT-4o-mini**：轻量快速、成本仅为 GPT-4o 的 1/20，适合预算敏感场景
 - **DeepSeek**：国产模型，中文理解能力强，成本极低，且不受 OpenAI 服务可用性影响，提供关键冗余
 
-三模型各有定位，覆盖"高质量→高性价比→低成本"的完整梯度，用户可按需选择。
+多模型各有所长，覆盖"深度推理→高质量→低成本"的完整梯度，用户可按需选择。
 </details>
 
 <details>
@@ -150,9 +152,15 @@ AI-Spoken-English-Trainer/
 │   └── models/
 │       └── schemas.py          # Pydantic 数据模型 (300+ 行)
 ├── modules/                    # 核心业务逻辑模块
-│   ├── llm.py                  # LLM 对话引擎 (3 模型路由 + 开场白生成)
+│   ├── agents/                 # LangGraph Agent 工作流
+│   │   ├── evaluation_graph.py       # 课后评测 Agent
+│   │   ├── realtime_feedback_graph.py # 实时反馈 Agent
+│   │   └── llm_factory.py            # LLM 工厂（多模型路由）
+│   ├── llm.py                  # LLM 对话引擎 (4 模型路由 + 开场白生成)
 │   ├── grammar.py              # 语法纠错引擎 (LLM JSON 结构化输出)
-│   ├── pronunciation.py        # 发音评测引擎 (6 维评分 + 逐词分析)
+│   ├── pronunciation.py        # 发音评测引擎 (Chivox + LLM)
+│   ├── chivox_pronunciation.py # 驰声 Chivox MCP 音素级评测
+│   ├── asr.py                  # 科大讯飞 + Web Speech ASR 引擎
 │   ├── tts.py                  # TTS 语音合成引擎 (Edge→Azure→OpenAI 降级)
 │   ├── evaluation.py           # 会话评估引擎 (6 维综合评分)
 │   └── report.py               # 课后报告生成引擎 (LLM 逐句分析)
@@ -180,7 +188,9 @@ AI-Spoken-English-Trainer/
 │   └── db.py                   # SQLite 数据库操作 (6 张表完整 CRUD，557 行)
 ├── data/                       # 数据库文件目录 (sessions.db)
 ├── requirements.txt            # Python 依赖
-├── .env.example                # 环境变量模板 (7 个配置项)
+├── langgraph.json              # LangGraph 工作流配置
+├── AI英语口语陪练.ps1           # PowerShell 一键启动脚本
+├── .env.example                # 环境变量模板
 └── README.md
 ```
 
@@ -278,29 +288,50 @@ cp .env.example .env
 **.env 配置项说明**：
 
 ```ini
-# ===================== 必填 =====================
-# OpenAI API Key — 用于 GPT 对话 + TTS
+# ===================== 必填（至少配置一个 LLM Key）=====================
+# OpenAI API Key — 用于 GPT 对话
 # 申请地址: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# DeepSeek API Key — 备选对话模型（可选但推荐配置）
+# DeepSeek API Key — 备选对话模型（推荐配置，成本极低）
 # 申请地址: https://platform.deepseek.com/api_keys
 DEEPSEEK_API_KEY=sk-your-deepseek-api-key-here
+
+# MiMo Pro API Key — 小米大模型（深度推理，免费额度）
+# 申请地址: https://platform.mi.com
+MIMO_API_KEY=sk-your-mimo-api-key-here
 
 # JWT 密钥 — 用于用户认证令牌签名
 # 修改为你自己的随机字符串（长度建议 32+ 字符）
 JWT_SECRET_KEY=your-jwt-secret-change-in-production
 
+# ===================== 推荐配置 =====================
+# 驰声 (Chivox) — 音素级发音评测
+# 申请地址: https://www.chivox.com
+CHIVOX_API_KEY=sk-your-chivox-api-key-here
+CHIVOX_MCP_URL=https://mcp.cloud.chivox.com
+
+# 科大讯飞 (iFlytek) — 高准确率流式 ASR
+# 申请地址: https://console.xfyun.cn
+XF_APPID=your-appid
+XF_API_KEY=your-xf-api-key
+XF_API_SECRET=your-xf-api-secret
+
+# LangSmith — AI 工作流可视化追踪（推荐开启）
+# 申请地址: https://smith.langchain.com
+LANGCHAIN_TRACING_V2=true
+LANGSMITH_API_KEY=lsv2_pt_your-langsmith-key
+LANGCHAIN_PROJECT=ai-english-trainer
+
 # ===================== 可选 =====================
-# Azure 语音服务 — 发音评测 + 高音质 TTS
+# Azure 语音服务 — 高音质 TTS 备选
 # 申请地址: https://portal.azure.com → 创建"语音服务"资源
 AZURE_SPEECH_KEY=your-azure-speech-key-here
 AZURE_SPEECH_REGION=eastasia
 
 # GitHub OAuth — 第三方登录（可选）
 # 创建 OAuth App: https://github.com/settings/developers
-# Homepage URL:  http://localhost:3000
-# Callback URL:  http://localhost:8000/api/auth/github/callback
+# Callback URL: http://localhost:8000/api/auth/github/callback
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 
@@ -310,22 +341,26 @@ FRONTEND_URL=http://localhost:3000
 
 > ⚠️ **重要提示**：
 > - 至少需要配置 `OPENAI_API_KEY` 或 `DEEPSEEK_API_KEY` 二者之一，否则 LLM 对话功能无法使用
-> - 如果两个 Key 都没有，可以先用 Edge TTS 和手动输入模式体验前端 UI
+> - 推荐同时配置 `CHIVOX_API_KEY`（音素级发音评测）和 `MIMO_API_KEY`（深度推理对话）
 > - `JWT_SECRET_KEY` 务必修改为自定义值，不要使用默认值
-> - Azure 和 GitHub OAuth 为可选项，不影响核心对话功能
+> - 科大讯飞 ASR 和 Azure / GitHub OAuth 为可选项，不影响核心功能
 
 ### 四、安装依赖
 
 ```bash
-# ===== 后端 Python 依赖 =====
-python -m venv venv
+# ===== 推荐方式：使用 conda 虚拟环境 =====
+# 创建并激活 conda 环境（Python 3.11）
+conda create -n ai-english-trainer python=3.11 -y
+conda activate ai-english-trainer
 
-# Windows 激活虚拟环境:
-venv\Scripts\activate
-# macOS/Linux 激活虚拟环境:
-# source venv/bin/activate
-
+# 安装后端 Python 依赖
 pip install -r requirements.txt
+
+# ===== 备选方式：使用 venv =====
+# python -m venv venv
+# Windows: venv\Scripts\activate
+# macOS/Linux: source venv/bin/activate
+# pip install -r requirements.txt
 
 # ===== 前端 Node.js 依赖 =====
 cd frontend
@@ -335,16 +370,31 @@ cd ..
 
 ### 五、启动应用
 
-需要同时运行后端和前端，打开两个终端窗口：
+**⚡ 一键启动（推荐）**：
+
+在项目根目录右键运行 PowerShell 脚本：
+
+```powershell
+.\AI英语口语陪练.ps1
+```
+
+脚本会自动：检测端口冲突 → 激活 conda 环境 → 设置 UTF-8 编码 → 启动前后端 → 打开浏览器。
+
+---
+
+**手动启动**（两个终端窗口）：
 
 **终端 1 — 启动后端 (FastAPI)**：
 
 ```bash
-# 确保在项目根目录，且已激活虚拟环境
+# 确保在项目根目录，且已激活 conda 环境
 cd d:\AI-Spoken-English-Trainer
 
+# 中文 Windows 必须设置 UTF-8 编码
+$env:PYTHONUTF8 = "1"
+
 # 启动后端服务
-python -m uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 启动成功后显示：
@@ -422,7 +472,7 @@ npx next dev --port 3000
 
 1. **选择场景**：在左侧边栏选择练习场景（职场面试/餐厅点餐/商务会议）
 2. **选择难度**：根据你的英语水平选择初级/中级/高级
-3. **选择模型**：选择 OpenAI GPT-4o / GPT-4o-mini / DeepSeek，不同模型对话风格各异
+3. **选择模型**：选择 MiMo Pro / GPT-4o / DeepSeek，不同模型对话风格各异
 4. **新建会话**：点击「新建会话」按钮开始练习
 5. **开始对话**：点击麦克风按钮说话，或使用文本输入框
 6. **查看反馈**：每轮对话后自动显示发音评分和语法纠错
@@ -446,8 +496,8 @@ npx next dev --port 3000
 
 | 模型 | 图标 | 风格特点 | 适用场景 |
 |------|------|------|------|
+| **MiMo Pro** | 📱 | 深度推理、逻辑严谨、善于追问 | 复杂话题讨论、需要深入分析 |
 | **GPT-4o** | 🧠 | 温暖自然、词汇丰富、鼓励式对话 | 追求地道表达与语境丰富度 |
-| **GPT-4o-mini** | ⚡ | 简洁直白、语言简单高效 | 快速问答、基础纠错反馈 |
 | **DeepSeek** | 🔍 | 务实直接、教学语气、耐心指导 | 系统学习、需要详细解释 |
 
 ### TTS 音色支持
@@ -524,14 +574,17 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 | 亮点 | 说明 |
 |------|------|
-| 🧠 **三模型差异化风格** | GPT-4o 温暖鼓励、GPT-4o-mini 简洁高效、DeepSeek 耐心教学——每个模型有独立"人设"，而非简单切换引擎 |
+| 🧠 **四模型差异化风格** | MiMo Pro 深度推理、GPT-4o 温暖鼓励、DeepSeek 耐心教学——每个模型有独立"人设"，而非简单切换引擎 |
+| 🎙️ **Chivox 音素级发音评测** | 驰声 MCP 引擎支持真实音频音素分析，逐词逐音精准定位发音问题，支持 WebM/Opus 直传 |
 | 🔊 **免费 TTS 零门槛** | Edge TTS 免 API Key、免付费，~200ms 极速合成，配合自动播放实现无缝语音对话 |
-| 📊 **六维量化评估** | 语法/词汇/流利度/表达/自然度/情感六个维度独立评分，附带逐句分析和强弱项诊断 |
+| 📊 **三维度双语报告** | 发音·语法·表达三个维度 + 六维综合评分，逐句 LLM 深度分析，中英双语强弱项诊断 |
 | 🎯 **纠错后置不打断** | 对话流畅优先，纠错在后台异步完成，折叠面板呈现——想看看、不想看继续聊 |
 | 🔗 **页面数据联动** | ASR → Grammar / Pronunciation → TTS 通过 URL 参数无缝跳转，形成练习闭环 |
+| 🤖 **LangGraph 双 Agent** | 实时反馈 Agent + 课后评测 Agent，LangSmith 全链路可视化追踪 |
 | 📦 **零配置数据库** | SQLite WAL 模式 + 自动建表，clone 即有完整数据库，无需额外安装 |
 | 🌐 **中英双语反馈** | 语法纠错、发音提示、学习报告全部提供英文+中文双语解释 |
 | 🔐 **双通道认证** | 邮箱注册 + GitHub OAuth，HttpOnly Cookie 防 XSS |
+| ⚡ **一键启动脚本** | PowerShell 脚本自动处理端口清理、conda 环境激活、编码设置，一键启动全部服务 |
 
 ### 实际效果
 
@@ -540,8 +593,8 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 - ✅ **5 大核心功能全部闭环**：场景对话 → 发音评测 → 语法纠错 → ASR 转写 → TTS 合成 → 课后报告
 - ✅ **11 个前端页面**：覆盖注册登录、首页、语音对话、4 个独立练习模块、历史记录、详情页、报告页
 - ✅ **20 个 RESTful API**：全部通过 FastAPI 自动生成的 Swagger 文档可在线调试
-- ✅ **3 套 LLM 风格 + 15 种 TTS 音色 + 3 个场景 × 3 个难度**：组合出丰富的练习配置
-- ✅ **18 个 Pull Request**：严格遵守 Feature Branch + Squash & Merge 工作流，代码零冲突合并
+- ✅ **4 套 LLM 风格 + 15 种 TTS 音色 + 3 个场景 × 3 个难度**：组合出丰富的练习配置
+- ✅ **20+ 个 Pull Request**：严格遵守 Feature Branch + Squash & Merge 工作流，代码零冲突合并
 
 ---
 
@@ -550,7 +603,7 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 - **前后端分离** — FastAPI + Next.js App Router，通过 RESTful API 解耦通信
 - **模块化引擎** — LLM / TTS / Grammar / Pronunciation / Evaluation / Report 六大独立引擎，单一职责
 - **三级 TTS 降级** — Edge → Azure → OpenAI，优先使用免费 Edge，API Key 未配置时自动跳过低级引擎
-- **LLM 多模型路由** — 基于 OpenAI SDK 兼容接口统一调用 GPT-4o / GPT-4o-mini / DeepSeek，通过系统 Prompt 注入差异化风格
+- **LLM 多模型路由** — 基于 OpenAI SDK 兼容接口统一调用 MiMo Pro / GPT-4o / DeepSeek，通过系统 Prompt 注入差异化风格
 - **JWT Cookie 认证** — HttpOnly Cookie 防 XSS，自动携带跨域凭证
 - **SQLite WAL 模式** — 读写并发性能优化，单文件零配置部署
 - **AI 结构化输出** — 语法纠错和报告生成使用 JSON 结构化 Prompt，确保前端可解析
@@ -567,7 +620,7 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 > 传统口语练习工具的 AI 回复往往机械生硬，缺乏真实对话的节奏感和情感温度。
 
-- **多模型风格注入**：不满足于简单切换模型，而是为每个模型定制独立的系统 Prompt 风格指令——GPT-4o 温暖鼓励（模仿友善母语者）、GPT-4o-mini 简洁高效、DeepSeek 耐心教学（模仿老师）。用户切换模型时，感受到的是不同"陪练人格"而非仅仅不同"引擎"
+- **多模型风格注入**：不满足于简单切换模型，而是为每个模型定制独立的系统 Prompt 风格指令——MiMo Pro 深度推理（善于追问与深入分析）、GPT-4o 温暖鼓励（模仿友善母语者）、DeepSeek 耐心教学（模仿老师）。用户切换模型时，感受到的是不同"陪练人格"而非仅仅不同"引擎"
 - **场景化角色扮演**：AI 根据选定场景自动代入角色身份——面试官会追问行为问题、服务员会主动推荐菜品、会议主持人会引导议题切换，而非泛泛地"一问一答"
 - **动态难度适应**：同一场景下，初级难度 AI 使用基础词汇并放慢节奏，高级难度则使用母语级表达和深度追问，模拟真实语言进阶路径
 - **开场白自动生成**：每个新会话由 LLM 根据场景+难度动态生成个性化开场白，而非固定模板
@@ -576,7 +629,8 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 > 口语练习中，每多一秒等待都在削弱用户的表达欲望和沉浸感。
 
-- **浏览器端语音识别 (Web Speech API)**：语音识别在浏览器本地完成，无需将音频上传服务器转写，消除网络往返延迟，实现边说边出字的实时体验
+- **科大讯飞流式 ASR**：高准确率流式语音识别，边说边出字，支持 en_US 等 4 语种，识别结果自动归档历史
+- **浏览器端 Web Speech API 辅助**：作为轻量备选，无需上传音频，实现本地实时转写
 - **Edge TTS 零延迟合成**：默认采用微软 Edge TTS（免费、无需 API Key），合成速度极快——通常 200ms 内返回音频，配合自动播放策略实现 AI 回复"说完即播"
 - **三级降级保障链路**：Edge（免费快速）→ Azure（高质量）→ OpenAI（兜底），任一引擎不可用时自动切换下一级，确保 TTS 服务永不中断
 - **连续对话一气呵成**：用户说完→自动识别→AI 回复→自动朗读，全程无需点击，形成自然的"说-听-说"循环
@@ -585,7 +639,7 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 > 实时打断纠错会破坏口语流利度，但只给分数不说原因则无法进步。
 
-- **"对话优先，纠错后置"策略**：对话过程中让用户自由表达，不打断、不中断。每轮对话完成后，系统在后台异步进行发音评估和语法分析，在消息气泡下方以折叠面板形式呈现——想看就看，不想看继续聊
+- **"对话优先，纠错后置"策略**：对话过程中让用户自由表达，不打断、不中断。每轮对话完成后，系统在后台异步进行发音评估（Chivox 音素级）和语法分析，在消息气泡下方以折叠面板形式呈现——想看就看，不想看继续聊
 - **8 类细分语法错误检测**：覆盖 grammar / vocabulary / word_order / preposition / article / tense / spelling / punctuation，精确定位问题类型而非笼统提示
 - **中英双语纠正解释**：每处错误提供英文技术说明 + 中文通俗解释，消除理解门槛。例如不仅告诉你 "缺少冠词"，还告诉你 "英语中单数可数名词前需要加 a/an/the"
 - **"更优表达"而非仅仅"正确"**：不仅纠正语法错误，还建议更地道自然的表达方式。即使句子语法正确，也会推荐母语者更常用的说法
@@ -605,13 +659,12 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 ## 开发计划
 
-本项目为72小时竞赛开发项目，分3个PR完成：
+本项目为72小时竞赛开发项目（v1.0），后续持续迭代至 v2.0+：
 
-| PR | 日期 | 内容 | 状态 |
+| 版本 | 日期 | 内容 | 状态 |
 |----|------|------|------|
-| PR1 | 6.5 | 项目初始化、Next.js+FastAPI架构搭建、认证系统、数据库设计 | ✅ 已完成 |
-| PR2 | 6.6 | 核心语音交互：LLM对话引擎+语法纠错+ASR转写+TTS合成 | ✅ 已完成 |
-| PR3 | 6.7 | 发音评测接入、报告生成、前端全部页面开发与 UI 优化 | ✅ 已完成 |
+| v1.0 | 6.5-6.7 | 项目初始化、Next.js+FastAPI架构、认证、LLM对话、语法纠错、TTS/ASR、发音评测、课后报告 | ✅ 已完成 |
+| v2.0 | 6.9+ | 驰声 Chivox 音素级评测、科大讯飞 ASR、MiMo Pro 模型、LangGraph 双 Agent 工作流、LangSmith 追踪、首页更新、一键启动脚本 | ✅ 已完成 |
 
 ---
 
@@ -623,9 +676,9 @@ Edge TTS（免费）默认可用以下音色；Azure / OpenAI 音色需配置对
 
 | 分支类型 | 命名规范 | 示例 | 数量 |
 |----------|----------|------|------|
-| 新功能 | `feat/<模块名>` | `feat/llm-conversation-engine` | 10 |
-| 缺陷修复 | `fix/<问题描述>` | `fix/github-oauth-encoding` | 3 |
-| 文档更新 | `docs/<描述>` | `docs/sync-framework-migration-docs` | 1 |
+| 新功能 | `feat/<模块名>` | `feat/llm-conversation-engine` | 15+ |
+| 缺陷修复 | `fix/<问题描述>` | `fix/github-oauth-encoding` | 5+ |
+| 文档更新 | `docs/<描述>` | `docs/sync-framework-migration-docs` | 2+ |
 | 项目初始化 | `pr<N>-project-setup` | `pr1-project-setup` | 1 |
 
 **分支生命周期**：
@@ -713,7 +766,7 @@ gitGraph
 
 ### 关键开发节点
 
-项目从零到完整交付历时 **3 天（6.5 ~ 6.7）**，共提交 18 个 Pull Request：
+项目从零到完整交付历时 **3 天（6.5 ~ 6.7）竞赛阶段**，后续持续迭代优化至 v2.0，共提交 20+ 个 Pull Request：
 
 | 阶段 | 时间 | 核心成果 | PR 编号 |
 |------|------|----------|--------|
@@ -725,6 +778,7 @@ gitGraph
 | 📊 **评测报告** | 6.7 | 发音评测（Web Speech + DeepSeek）、课后报告（六维评估） | #13, #14, #15 |
 | 🎨 **前端优化** | 6.7 | 首页引导、场景背景、历史详情、多维评分 UI、响应式布局 | #16, #17 |
 | 🐛 **缺陷修复** | 6.7 | OAuth 编码修复、登录跳转修复、hydration 错误修复 | #16, #18, 修复分支 |
+| 🔄 **v2.0 持续迭代** | 6.9+ | Chivox 音素级评测、科大讯飞 ASR、MiMo Pro 模型、LangGraph Agent、LangSmith 追踪、首页更新、PowerShell 启动脚本 | feat/* 分支 |
 
 ### 开发节奏统计
 
@@ -732,6 +786,7 @@ gitGraph
 6.5  ─ ████░░░░░░░░░░░░░░  项目启动 + 需求文档
 6.6  ─ ████████████░░░░░░  框架迁移 + LLM对话 + 语法纠错 (10个PR)
 6.7  ─ ██████████████████  语音能力 + 评测报告 + 前端优化 + 缺陷修复 (8个PR)
+6.9+ ─ ██████░░░░░░░░░░░░  v2.0 迭代: Chivox + 讯飞 + MiMo + LangGraph + 启动脚本
 ```
 
 ---
@@ -742,11 +797,9 @@ gitGraph
 
 尽管在 72 小时内完成了核心功能的闭环开发，受限于时间和资源，以下方面仍需改进：
 
-| 不足 | 具体表现 | 原因 |
+| 不足 | 具体表现 | 原因 / 进展 |
 |------|----------|------|
 | 📱 **缺少移动端适配** | 界面仅针对桌面端设计，手机上布局错乱、操作不便 | 72h 竞赛时间过紧，优先保证桌面端功能完整 |
-| 🎤 **ASR 依赖浏览器 API** | Web Speech API 在 Firefox/Safari 上支持有限，识别准确度不如 Whisper | Whisper API 需要额外余额，用户计划后续接入 |
-| 📝 **发音评测非音频级** | 当前为文本比对评分方案，非 Azure 原生音素级分析 | Azure 学生账号审批中，方案已预留接口 |
 | 🎨 **UI 非响应式设计** | 侧边栏在小屏幕上占用过大空间，表格和卡片未做断点适配 | 开发时间集中在功能闭环，响应式为下一阶段重点 |
 | 🔒 **缺少用户数据隔离** | 所有用户共享同一个 SQLite 数据库文件 | 当前为单用户/演示模式设计，多用户场景需增加权限控制 |
 | 🧪 **缺少自动化测试** | 无单元测试和端到端测试覆盖 | 72h 内以功能实现为第一优先级 |
@@ -757,16 +810,22 @@ gitGraph
 
 计划从以下方向持续迭代，逐步将 Demo 演进为可正式上线的产品：
 
+**已完成的优化（v2.0+）**：
+
+- ✅ **驰声 Chivox 音素级评测**：替换 LLM 文本比对方案，实现真实音频音素分析，逐词逐音打分
+- ✅ **科大讯飞 ASR 接入**：高准确率流式语音识别，支持 en_US 等 4 语种
+- ✅ **MiMo Pro 深度推理模型**：小米大模型接入，支持深度推理对话
+- ✅ **LangGraph 双 Agent 工作流**：实时反馈 + 课后评测双 Agent，LangSmith 全链路追踪
+- ✅ **PowerShell 一键启动脚本**：自动端口清理、conda 环境激活、编码设置
+
 **短期优化（1-2 周）**：
 
 - 📱 **移动端适配**：使用 Tailwind 响应式断点（sm/md/lg/xl）对全部 11 个页面做移动端适配，优先保证注册、对话、报告三个核心流程在手机上的体验
-- 🎤 **Whisper API 接入**：替换 Web Speech API 为 OpenAI Whisper，提升识别准确率和浏览器兼容性
-- 📝 **Azure 发音评测接入**：待学生账号审批通过后，接入 Azure Pronunciation Assessment 实现真正的音素级评分
+- 🌍 **自定义场景系统**：允许用户自定义场景名称、AI 角色、对话风格，上传场景背景图
 
 **中期规划（1-2 月）**：
 
 - 📲 **微信小程序开发**：将核心对话+纠错+报告功能封装为微信小程序，降低用户触达门槛
-- 🎨 **自定义场景系统**：允许用户自定义场景名称、AI 角色、对话风格，上传场景背景图
 - 📊 **学习仪表盘**：提供长期的发音评分趋势图、词汇量增长曲线、活跃天数统计
 
 **长期愿景（3-6 月）**：
@@ -787,10 +846,14 @@ gitGraph
 | PyJWT | >=2.8.0 | JWT 令牌管理 | MIT |
 | openai | >=1.12.0 | OpenAI API 客户端 (LLM + TTS) | Apache 2.0 |
 | edge-tts | >=6.1.0 | Edge TTS 免费语音合成 | MIT |
-| azure-cognitiveservices-speech | >=1.35.0 | Azure 语音服务 (TTS 备选 + 未来发音评测) | MIT |
+| langchain | >=0.3.0 | LLM 应用框架 | MIT |
+| langgraph | >=0.2.0 | Agent 工作流编排 | MIT |
+| langsmith | >=0.1.0 | AI 可观测性追踪 | MIT |
+| azure-cognitiveservices-speech | >=1.35.0 | Azure 语音服务 (TTS 备选) | MIT |
 | python-dotenv | >=1.0.0 | 环境变量管理 | BSD-3 |
-| requests | >=2.31.0 | HTTP 请求 (GitHub OAuth) | Apache 2.0 |
+| requests | >=2.31.0 | HTTP 请求 (GitHub OAuth / 讯飞 API) | Apache 2.0 |
 | pydantic | >=2.0 | 数据验证 | MIT |
+| httpx | >=0.27.0 | 异步 HTTP 客户端 | BSD |
 | next | 14.x | React 前端框架 | MIT |
 | react | 18.x | UI 库 | MIT |
 | tailwindcss | 3.x | CSS 框架 | MIT |
@@ -804,9 +867,13 @@ gitGraph
 
 | API服务 | 用途 |
 |---------|------|
-| OpenAI API | GPT-4o对话模型、Whisper语音识别、TTS语音合成 |
-| DeepSeek API | 备选对话模型 |
-| Azure Speech Services | 发音评测（Pronunciation Assessment）、备选TTS |
+| OpenAI API | GPT-4o 对话模型、TTS 语音合成 |
+| 小米 MiMo API | MiMo Pro 深度推理对话模型（免费额度） |
+| DeepSeek API | 备选对话模型（成本极低） |
+| 驰声 Chivox MCP | 音素级发音评测（真实音频分析） |
+| 科大讯飞 API | 高准确率流式语音识别 (ASR) |
+| Azure Speech Services | 备选 TTS 高音质语音合成 |
+| LangSmith | AI 工作流全链路可视化追踪 |
 
 ---
 
@@ -833,7 +900,7 @@ A: 部分功能可用。TTS 可用免费的 Edge TTS；但 LLM 对话、语法�
 <details>
 <summary><strong>Q: 如何切换 AI 模型？</strong></summary>
 
-A: 在左侧边栏「AI 模型」区域选择一个模型，新建的会话将使用所选模型。三个模型的对话风格各有侧重：GPT-4o 最自然、GPT-4o-mini 最快速、DeepSeek 最具教学性。
+A: 在左侧边栏「AI 模型」区域选择一个模型，新建的会话将使用所选模型。各模型对话风格各有侧重：MiMo Pro 深度推理、GPT-4o 最自然、DeepSeek 最具教学性。
 </details>
 
 <details>
@@ -862,9 +929,9 @@ AI英语口语陪练基于 Next.js + FastAPI 全栈架构，将 LLM 对话引擎
 
 ### 回顾：四大创新维度的落地
 
-**对话交互的自然度** — 通过多模型差异化风格注入（GPT-4o 温暖鼓励 / GPT-4o-mini 简洁高效 / DeepSeek 耐心教学），让用户在切换模型时感受到的是不同"陪练人格"而非不同"引擎"。结合场景化角色扮演和动态难度适应，AI 能根据场景身份调整对话策略，从初级的基础词汇慢速引导到高级的母语级深度追问，形成渐进式的真实对话体验。
+**对话交互的自然度** — 通过多模型差异化风格注入（MiMo Pro 深度推理 / GPT-4o 温暖鼓励 / DeepSeek 耐心教学），让用户在切换模型时感受到的是不同"陪练人格"而非不同"引擎"。结合场景化角色扮演和动态难度适应，AI 能根据场景身份调整对话策略，从初级的基础词汇慢速引导到高级的母语级深度追问，形成渐进式的真实对话体验。
 
-**语音端到端的流畅性** — 浏览器端 Web Speech API 实现本地语音识别，消除音频上传的往返延迟；Edge TTS 以 ~200ms 极速合成配合自动播放策略，让整个"说-听-说"循环一气呵成、无需点击。三级降级保障链路（Edge → Azure → OpenAI）确保 TTS 服务在任何配置下都可用，真正做到了零门槛开箱即用。
+**语音端到端的流畅性** — 科大讯飞流式 ASR 实现高准确率边说边出字，Web Speech API 作为轻量备选；Edge TTS 以 ~200ms 极速合成配合自动播放策略，让整个"说-听-说"循环一气呵成、无需点击。三级降级保障链路（Edge → Azure → OpenAI）确保 TTS 服务在任何配置下都可用，真正做到了零门槛开箱即用。
 
 **纠错的精准度与时机** — 坚持"对话优先，纠错后置"的设计哲学：对话过程中不打断用户，每轮结束后在消息气泡下方以折叠面板呈现发音评分和语法分析。8 类细分语法错误检测精确定位问题类型，中英双语解释消除理解门槛，"更优表达"推荐让纠正不止于"对错"、更引导"地道"。逐词发音定位则让用户精准知道哪个音节需要改进。
 
